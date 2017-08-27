@@ -69,6 +69,18 @@ struct DataView
 		}
 		*cout = '\0';
 	}
+
+	void toString(char *out, int N) {
+		char* cout = out;
+		const u8* cin = begin;
+		while (cin != end && cout - out < N - 1)
+		{
+			*cout = (char)*cin;
+			++cin;
+			++cout;
+		}
+		*cout = '\0';
+	}
 };
 
 

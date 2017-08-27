@@ -9,12 +9,17 @@
 #include "types.h"
 #include "model.h"
 #include "convertfbx.h"
+#include "dumpfbx.h"
 
 char *filepath = nullptr;
 char *outpath = nullptr;
+bool dumpFbxTree = false;
 
 void printHelp(char *programName) {
-    printf("Usage: %s [-o outfile] filename\n", programName);
+    printf("Usage: %s [options] filename\n", programName);
+    printf("Options:\n");
+    printf("  -o outfile    specify the [o]utput file\n");
+    printf("  -t            dump the fbx [t]ree to the file 'tree.out'\n");
 }
 
 bool parseArgs(int argc, char *argv[]) {
@@ -52,8 +57,11 @@ bool parseArgs(int argc, char *argv[]) {
 
         }
 
+        // handle unary args here
         switch (nextmode) {
-            // handle unary args here
+        case 't':
+            dumpFbxTree = true;
+            break;
         default:
             mode = nextmode;
         }
@@ -115,6 +123,11 @@ int main(int argc, char *argv[]) {
         exit(-2);
     }
 
+    // print out the fbx tree
+    if (dumpFbxTree) {
+        dumpFbx(scene);
+    }
+
     // convert to a Model
     Model model;
     convertFbxToModel(scene, &model);
@@ -123,8 +136,8 @@ int main(int argc, char *argv[]) {
     // TODO
     // exportModelToJson(&model);
 
-    exit(0);
+    exit(0); // die before piecewise deallocating.
 
     scene->destroy();
-    delete[] content; // OpenFBX examples don't deallocate buffer until they're done with the data, so I'm not sure if we can safely deallocate before that.
+    delete[] content; // Looks like OpenFBX may keep references to the original buffer, so we can't delete it until we're done.
 }
