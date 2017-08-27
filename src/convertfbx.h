@@ -7,7 +7,8 @@
 
 #include "ofbx.h"
 #include "model.h"
+#include "args.h"
 
-bool convertFbxToModel(const ofbx::IScene *scene, Model *model);
+bool convertFbxToModel(const ofbx::IScene *scene, Model *model, Options *optsß);
 
 #endif //PB_FBX_CONV_LOADFBX_H

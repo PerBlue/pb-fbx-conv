@@ -7,6 +7,8 @@
 
 #include "ofbx.h"
 
+void dumpMaterial(FILE *file, const ofbx::Material *mat, int indent = 2);
+
 void dumpFbx(const ofbx::IScene *scene);
 
 #endif //PB_FBX_CONV_DUMPFBX_H

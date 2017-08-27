@@ -56,6 +56,12 @@ static void dumpElementRecursive(FILE *file, const IElement *e, int indent = ind
     }
 }
 
+void dumpMaterial(FILE *file, const Material *mat, int indent) {
+    const IElement *el = &mat->element;
+    dumpElement(file, el, indent);
+    dumpElementRecursive(file, el->getFirstChild(), indent + indentation);
+}
+
 void dumpFbx(const IScene *scene) {
     FILE *file = fopen("tree.out", "w");
     if (file == nullptr) {

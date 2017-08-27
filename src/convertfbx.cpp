@@ -4,17 +4,9 @@
 
 #include <cmath>
 #include "convertfbx.h"
+#include "dumpfbx.h"
 
 using namespace ofbx;
-
-static void convertMeshes(const IScene *scene, Model *model);
-
-bool convertFbxToModel(const IScene *scene, Model *model) {
-    convertMeshes(scene, model);
-
-
-    return true;
-}
 
 static void dumpMatrix(Matrix mat) {
     for (int n = 0; n < 4; n++) {
@@ -127,7 +119,7 @@ static BlendWeight *computeBlendWeights(const Skin *skin, int nVertWeights, int 
     return data;
 }
 
-static void convertMeshes(const IScene *scene, Model *model) {
+static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
     int nMesh = scene->getMeshCount();
     for (int c = 0; c < nMesh; c++) {
         const Mesh *mesh = scene->getMesh(c);
@@ -162,6 +154,15 @@ static void convertMeshes(const IScene *scene, Model *model) {
             }
         }
 
+        if (opts->dumpMaterials) {
+            int nMaterials = mesh->getMaterialCount();
+            for (int c = 0; c < nMaterials; c++) {
+                const Material *mat = mesh->getMaterial(c);
+                dumpMaterial(stdout, mat);
+            }
+        }
+
+
         ModelMesh *outMesh = findOrCreateMesh(model, attrs, nVerts);
         std::vector<float> *verts = &outMesh->vertices;
         verts->reserve(verts->size() + nVerts * outMesh->vertexSize);
@@ -169,4 +170,9 @@ static void convertMeshes(const IScene *scene, Model *model) {
 
         delete [] blendWeights; // delete [] nullptr is defined and has no effect.
     }
+}
+
+bool convertFbxToModel(const IScene *scene, Model *model, Options *opts) {
+    convertMeshes(scene, model, opts);
+    return true;
 }
