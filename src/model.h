@@ -39,22 +39,36 @@
 // - calculateVertexSize(Attributes)
 typedef u32 Attributes;
 
-struct Texture {
+#define USAGE_NONE           1
+#define USAGE_DIFFUSE        2
+#define USAGE_EMISSIVE       3
+#define USAGE_AMBIENT        4
+#define USAGE_SPECULAR       5
+#define USAGE_SHININESS      6
+#define USAGE_NORMAL         7
+#define USAGE_BUMP           8
+#define USAGE_TRANSPARENCY   9
+#define USAGE_REFLECTION    10
+typedef u32 Usage;
+
+struct ModelTexture {
     std::string id;
     std::string texturePath;
     f32 uvTranslation[2] = {0, 0};
     f32 uvScale[2] = {1, 1};
+    Usage usage;
 };
 
 struct ModelMaterial {
     std::string id;
+    bool lambertOnly = false;
     f32 ambient[3]  = {1,1,1};
     f32 diffuse[3]  = {1,1,1};
     f32 specular[3] = {0,0,0};
     f32 emissive[3] = {0,0,0};
     f32 shininess = 0;
     f32 opacity = 1;
-    std::vector<Texture> textures;
+    std::vector<ModelTexture> textures;
 };
 
 struct MeshPart {
