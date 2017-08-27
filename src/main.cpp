@@ -95,6 +95,7 @@ bool parseArgs(int argc, char *argv[]) {
 }
 
 int main(int argc, char *argv[]) {
+    clock_t start = clock();
     if (!parseArgs(argc, argv)) {
         exit(1);
     }
@@ -136,6 +137,8 @@ int main(int argc, char *argv[]) {
     // TODO
     // exportModelToJson(&model);
 
+    clock_t end = clock();
+    printf("Completed in %dms\n", int((end - start) * 1000 / CLOCKS_PER_SEC));
     exit(0); // die before piecewise deallocating.
 
     scene->destroy();

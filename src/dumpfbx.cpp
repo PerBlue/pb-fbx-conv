@@ -58,12 +58,12 @@ static void dumpElementRecursive(FILE *file, const IElement *e, int indent = ind
 
 void dumpFbx(const IScene *scene) {
     FILE *file = fopen("tree.out", "w");
-    if (file != nullptr) {
-        printf("Dumping FBX tree to tree.out\n");
-    } else {
-        printf("Could not open file 'tree.out'. Continuing.");
+    if (file == nullptr) {
+        printf("Could not open file 'tree.out' (fopen returned nullptr). Continuing.");
         return;
     }
+
+    printf("Dumping FBX tree to tree.out\n");
     fprintf(file, "Elements:\n");
     const IElement *rootElement = scene->getRootElement();
     dumpElementRecursive(file, rootElement);

@@ -33,6 +33,8 @@
 #define ATTR_BLENDWEIGHT6   (1<<20)
 #define ATTR_BLENDWEIGHT7   (1<<21)
 #define ATTR_MAX            (1<<22)
+#define MAX_TEX_COORDS      8
+#define MAX_BLEND_WEIGHTS   8
 // Adding a new attribute? Don't forget to update...
 // - calculateVertexSize(Attributes)
 typedef u32 Attributes;
