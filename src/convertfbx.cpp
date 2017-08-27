@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <sstream>
+#include <cstring>
 #include "convertfbx.h"
 #include "dumpfbx.h"
 
@@ -250,11 +251,11 @@ static void convertMaterial(const Material *mat, ModelMaterial *out) {
 // ---------------------- Blend Weights ------------------------
 
 struct BlendWeight {
-    u32 index;
-    f32 weight;
+    s32 index = -1;
+    f32 weight = 0;
 };
 
-static int computeBlendWeightCount(const Skin *skin, int nVerts) {
+static int computeBlendWeightCount(const Skin *skin, int nVerts, int maxBlendWeights) {
     int *refCounts = new int[nVerts];
     memset(refCounts, 0, nVerts * sizeof(int));
     int nCluster = skin->getClusterCount();
@@ -278,14 +279,29 @@ static int computeBlendWeightCount(const Skin *skin, int nVerts) {
     for (int c = 0; c < nVerts; c++) {
         if (refCounts[c] > max) max = refCounts[c];
     }
+    if (max > maxBlendWeights) {
+        printf("Truncating number of blend weights from %d -> %d\n", max, maxBlendWeights);
+        max = maxBlendWeights;
+    }
     printf("Max blend weights: %d\n", max);
     return max;
+}
+
+static inline void normalizeBlendWeights(BlendWeight *weights, int nVertWeights) {
+    float sum = 0;
+    for (int d = 0; d < nVertWeights; d++) {
+        sum += weights[d].weight;
+    }
+    if (sum != 0) {
+        for (int d = 0; d < nVertWeights; d++) {
+            weights[d].weight /= sum;
+        }
+    }
 }
 
 static BlendWeight *computeBlendWeights(const Skin *skin, int nVertWeights, int nVerts) {
     int totalWeights = nVertWeights * nVerts;
     BlendWeight *data = new BlendWeight[totalWeights];
-    memset(data, 0, sizeof(BlendWeight) * totalWeights);
 
     int nCluster = skin->getClusterCount();
     for (int c = 0; c < nCluster; c++) {
@@ -302,7 +318,7 @@ static BlendWeight *computeBlendWeights(const Skin *skin, int nVertWeights, int 
             if (u32(index) >= nVerts) continue;
 
             double weight = weights[d];
-            if (weight == 0) continue;
+            if (weight < 0.00001) continue;
 
             BlendWeight *vertWeights = &data[index * nVertWeights];
             // find the minimum current weight
@@ -324,20 +340,143 @@ static BlendWeight *computeBlendWeights(const Skin *skin, int nVertWeights, int 
     // normalize weights
     BlendWeight *vertWeights = data;
     for (int c = 0; c < nVerts; c++, vertWeights += nVertWeights) {
-        float sum = 0;
-        for (int d = 0; d < nVertWeights; d++) {
-            sum += vertWeights[d].weight;
-        }
-        if (sum != 0) {
-            for (int d = 0; d < nVertWeights; d++) {
-                vertWeights[d].weight /= sum;
-            }
-        }
+        normalizeBlendWeights(vertWeights, nVertWeights);
     }
 
     return data;
 }
 
+struct PreMeshPart {
+    int nodes[MAX_BLEND_WEIGHTS];
+    int material;
+    PreMeshPart(int material) : material(material) {
+        memset(nodes, -1, sizeof(nodes));
+    }
+};
+
+struct PolyBlendWeight {
+    s32 index = -1;
+    f32 weight = 0;
+};
+
+static int polyCompare(const void *a, const void *b) {
+    PolyBlendWeight *ba = (PolyBlendWeight *) a;
+    PolyBlendWeight *bb = (PolyBlendWeight *) b;
+    float result = bb->weight - ba->weight;
+    return result < 0 ? -1 : 1;
+}
+
+static int findOrCreateMeshPart(std::vector<PreMeshPart> &parts, int material, BlendWeight *weights, int nVertWeights) {
+    // build a list of the required nodes for this poly
+    const int nPolyNodes = MAX_BLEND_WEIGHTS * 3;
+    PolyBlendWeight polyNodes[nPolyNodes];
+
+    int totalPolyWeights = nVertWeights * 3;
+    for (int w = 0; w < totalPolyWeights; w++) {
+        BlendWeight &weight = weights[w];
+        int idx = weight.index;
+        if (idx < 0) continue;
+
+        // find or add the node id
+        int i = 0;
+        while (polyNodes[i].index >= 0 && polyNodes[i].index != idx) i++;
+        polyNodes[i].index = idx;
+        polyNodes[i].weight += weight.weight;
+    }
+
+    int maxIdx = 0;
+    while (maxIdx < nPolyNodes && polyNodes[maxIdx].index >= 0) maxIdx++;
+
+    // If we have more bones in this poly than nVertWeights, we need to cull some.
+    if (maxIdx > nVertWeights) {
+        qsort(polyNodes, maxIdx, sizeof(PolyBlendWeight), polyCompare);
+        // zero any weights we've removed
+        for (int c = nVertWeights; c < maxIdx; c++) {
+            PolyBlendWeight &pw = polyNodes[c];
+            for (int w = 0; w < totalPolyWeights; w++) {
+                BlendWeight &vw = weights[w];
+                if (vw.index == pw.index) {
+                    vw.index = -1;
+                    vw.weight = 0;
+                }
+            }
+        }
+        // renormalize the blend weights on our vertices
+        normalizeBlendWeights(weights + 0*nVertWeights, nVertWeights);
+        normalizeBlendWeights(weights + 1*nVertWeights, nVertWeights);
+        normalizeBlendWeights(weights + 2*nVertWeights, nVertWeights);
+
+        maxIdx = nVertWeights;
+    }
+
+    // Find an existing mesh part that can accept this set of weights and material
+    for (PreMeshPart &part : parts) {
+        if (part.material == material) {
+            int combinedNodes[MAX_BLEND_WEIGHTS];
+            memcpy(combinedNodes, part.nodes, sizeof(combinedNodes));
+
+            for (int c = 0; c < maxIdx; c++) {
+                PolyBlendWeight &p = polyNodes[c];
+                int i = 0;
+                while (i < nVertWeights && combinedNodes[i] >= 0 && combinedNodes[i] != p.index) i++;
+                if (i >= nVertWeights) goto nextPart;
+                combinedNodes[i] = p.index;
+            }
+
+            // If we get here, we successfully combined all the attributes!
+            memcpy(part.nodes, combinedNodes, sizeof(combinedNodes));
+            return int(&part - &parts[0]);
+        }
+    nextPart:;
+    }
+
+    // No existing mesh part that fits, time to make a new one.
+    parts.emplace_back(material);
+    PreMeshPart *part = &parts.back();
+    for (int c = 0; c < maxIdx; c++) {
+        part->nodes[c] = polyNodes[c].index;
+    }
+
+    return int(part - &parts[0]);
+}
+
+static int *assignTrisToParts(const int *materials, BlendWeight *weights, int nVertWeights, int nVerts, std::vector<PreMeshPart> &parts) {
+    // TODO: This is a really nasty optimization problem that I'm going to ignore for now.
+    // The problem is as follows:
+    // We have a bunch of polygons; each polygon has a set of up to nVertWeights bones on which it depends.
+    // We'd like to make a bunch of mesh parts. Each part has nVertWeight bones which it has available.
+    // Find the minimum set of mesh parts such that the bones for any polygon are a subset of one of the parts.
+
+    // My dumb greedy solution:
+    // For each polygon,
+    //   Look through all existing mesh parts for one in which the size of the union of the mesh part's bones and the polygon's bones is less than nVertWeights
+    //   If there is such a mesh part, add any missing bones to it and assign the polygon to that part.
+    //   Otherwise, make a new mesh part, set its bones to the polygon's bones, and assign the polygon to that part.
+
+    int nTris = nVerts / 3;
+    int *trisToParts = new int[nTris];
+    for (int c = 0; c < nTris; c++) {
+        int material = 0;
+        // find the material
+        if (materials) {
+            for (int k = 0; k < 3; k++) {
+                if (materials[k] > 0) {
+                    material = materials[k];
+                    break;
+                }
+            }
+        }
+
+        trisToParts[c] = findOrCreateMeshPart(parts, material, weights, nVertWeights);
+
+        // move forward one vertex
+        weights += nVertWeights * 3;
+        if (materials) materials += 3;
+    }
+
+    printf("Packed %d triangles into %d mesh parts.\n", nTris, int(parts.size()));
+    return trisToParts;
+}
 
 
 static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
@@ -357,9 +496,12 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
         const Vec2 *texCoords = geom->getUVs();
         const Vec4 *colors = geom->getColors();
         const Vec3 *tangents = geom->getTangents();
+        const int *materials = geom->getMaterials();
         const Skin *skin = geom->getSkin();
         int nBlendWeights = 0;
         BlendWeight *blendWeights = nullptr;
+        int *trisToParts = nullptr;
+        std::vector<PreMeshPart> parts;
 
         Attributes attrs = 0;
         if (positions) attrs |= ATTR_POSITION;
@@ -368,7 +510,7 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
         if (tangents)  attrs |= ATTR_TANGENT;
         if (texCoords) attrs |= ATTR_TEXCOORD0;
         if (skin) {
-            nBlendWeights = computeBlendWeightCount(skin, nVerts);
+            nBlendWeights = computeBlendWeightCount(skin, nVerts, opts->maxBlendWeights);
             if (nBlendWeights > MAX_BLEND_WEIGHTS) nBlendWeights = MAX_BLEND_WEIGHTS;
             if (nBlendWeights > 0) {
                 for (int c = 0; c < nBlendWeights; c++) {
@@ -376,6 +518,8 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
                 }
                 blendWeights = computeBlendWeights(skin, nBlendWeights, nVerts);
             }
+
+            trisToParts = assignTrisToParts(materials, blendWeights, nBlendWeights, nVerts, parts);
         }
 
         int nMaterials = mesh->getMaterialCount();
@@ -395,7 +539,9 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
         verts->reserve(verts->size() + nVerts * outMesh->vertexSize);
 
 
-        delete [] blendWeights; // delete [] nullptr is defined and has no effect.
+        // delete [] nullptr is defined and has no effect.
+        delete [] blendWeights;
+        delete [] trisToParts;
     }
 }
 

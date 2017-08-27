@@ -10,6 +10,7 @@ static void printHelp(char *programName) {
     printf("Usage: %s [options] filename\n", programName);
     printf("Options:\n");
     printf("  -o outfile    specify the [o]utput file\n");
+    printf("  -B maxWeights specify the max number of [B]lend weights per vertex (default 8)");
     printf("  -t            dump the fbx [t]ree to the file 'tree.out'\n");
     printf("  -m            dump the raw [m]aterials to the console\n");
     printf("  -M            dump the raw [M]eshes to the console\n");
@@ -34,6 +35,19 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
                     printf("Output file specified more than once! Using %s\n", opts->outpath);
                 }
                 break;
+
+            case 'B': {
+                int weights = atoi(cc);
+                if (weights < 0 || weights > MAX_BLEND_WEIGHTS) {
+                    printf("Error: number of blend weights must be between 0 and %d\n", MAX_BLEND_WEIGHTS);
+                    success = false;
+                } else {
+                    opts->maxBlendWeights = weights;
+                    if (weights == 0) printf("Disabling vertex skinning because of '-b 0' argument.");
+                }
+                break;
+            }
+
 
             default:
                 printf("Unknown flag: '-%c'\n", mode);

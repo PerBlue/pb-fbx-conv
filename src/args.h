@@ -5,6 +5,7 @@
 #ifndef PB_FBX_CONV_ARGS_H
 #define PB_FBX_CONV_ARGS_H
 
+#include "model.h"
 
 struct Options {
     char *filepath = nullptr;
@@ -14,6 +15,7 @@ struct Options {
     bool dumpMeshes = false;
     bool dumpGeom = false;
     bool dumpObj = false;
+    int maxBlendWeights = MAX_BLEND_WEIGHTS;
 };
 
 bool parseArgs(int argc, char *argv[], Options *opts);

@@ -17,19 +17,34 @@ static_assert(sizeof(u64) == 8, "u64 is not 8 bytes");
 
 struct Vec2
 {
-	double x, y;
+	union {
+		double xy[2];
+		struct {
+			double x, y;
+		};
+	};
 };
 
 
 struct Vec3
 {
-	double x, y, z;
+	union {
+		double xyz[3];
+		struct {
+			double x, y, z;
+		};
+	};
 };
 
 
 struct Vec4
 {
-	double x, y, z, w;
+	union {
+		double xyzw[4];
+		struct {
+			double x, y, z, w;
+		};
+	};
 };
 
 
@@ -41,7 +56,12 @@ struct Matrix
 
 struct Quat
 {
-	double x, y, z, w;
+	union {
+		double xyzw[4];
+		struct {
+			double x, y, z, w;
+		};
+	};
 };
 
 
