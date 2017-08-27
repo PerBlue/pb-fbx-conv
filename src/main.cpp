@@ -11,6 +11,7 @@
 #include "convertfbx.h"
 #include "dumpfbx.h"
 #include "args.h"
+#include "convertobj.h"
 
 Options opts;
 
@@ -47,6 +48,10 @@ int main(int argc, char *argv[]) {
     // print out the fbx tree
     if (opts.dumpFbxTree) {
         dumpFbx(scene);
+    }
+
+    if (opts.dumpObj) {
+        convertFbxToObj(scene, "geom.obj");
     }
 
     // convert to a Model

@@ -7,7 +7,7 @@
 
 #include "ofbx.h"
 
-void dumpMaterial(FILE *file, const ofbx::Material *mat, int indent = 2);
+void dumpObject(FILE *file, const ofbx::Object *obj, int indent = 2);
 
 void dumpFbx(const ofbx::IScene *scene);
 

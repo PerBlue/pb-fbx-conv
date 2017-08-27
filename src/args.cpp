@@ -12,6 +12,9 @@ static void printHelp(char *programName) {
     printf("  -o outfile    specify the [o]utput file\n");
     printf("  -t            dump the fbx [t]ree to the file 'tree.out'\n");
     printf("  -m            dump the raw [m]aterials to the console\n");
+    printf("  -M            dump the raw [M]eshes to the console\n");
+    printf("  -g            dump the raw [g]eometry to the console\n");
+    printf("  -O            dump a .obj file containing the tesselated geometry to 'geom.obj'\n");
 }
 
 bool parseArgs(int argc, char *argv[], Options *opts) {
@@ -56,6 +59,15 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
                 break;
             case 'm':
                 opts->dumpMaterials = true;
+                break;
+            case 'M':
+                opts->dumpMeshes = true;
+                break;
+            case 'g':
+                opts->dumpGeom = true;
+                break;
+            case 'O':
+                opts->dumpObj = true;
                 break;
             default:
                 mode = nextmode;

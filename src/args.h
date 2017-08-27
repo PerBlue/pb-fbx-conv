@@ -11,6 +11,9 @@ struct Options {
     char *outpath = nullptr;
     bool dumpFbxTree = false;
     bool dumpMaterials = false;
+    bool dumpMeshes = false;
+    bool dumpGeom = false;
+    bool dumpObj = false;
 };
 
 bool parseArgs(int argc, char *argv[], Options *opts);

@@ -9,6 +9,11 @@
 
 using namespace ofbx;
 
+
+// ---------------------- Utility ------------------------
+
+const int bufsize = 128;
+
 static void dumpMatrix(Matrix mat) {
     for (int n = 0; n < 4; n++) {
         printf("%.2f, %.2f, %.2f, %.2f\n", mat.m[n+0], mat.m[n+4], mat.m[n+8], mat.m[n+12]);
@@ -31,7 +36,15 @@ static ModelMesh *findOrCreateMesh(Model *model, Attributes attributes, u32 vert
     return mesh;
 }
 
-const void findName(const Object *node, const char *type, std::string &out) {
+static int hashVertex(float *vert, int vertSize) {
+    int h = 0;
+    for (int c = 0; c < vertSize; c++) {
+        h += 31 * *(int *) &vert[c];
+    }
+    return h;
+}
+
+static void findName(const Object *node, const char *type, std::string &out) {
     if (node->name[0]) out = &node->name[0];
     else {
         std::ostringstream stream;
@@ -39,8 +52,6 @@ const void findName(const Object *node, const char *type, std::string &out) {
         stream.str(out);
     }
 }
-
-const int bufsize = 128;
 
 static const IElementProperty *findNonemptyStringProperty(const IElementProperty *prop, char(&buf)[bufsize]) {
     while (prop != nullptr) {
@@ -73,6 +84,9 @@ static int getFloats(float *buf, int num, const IElementProperty *prop) {
     }
     return c;
 }
+
+
+// ---------------------- Materials ------------------------
 
 // There are two ways to set each of these properties (WLOG we use Ambient as an example):
 // 1) specify AmbientColor and, optionally, AmbientFactor
@@ -232,6 +246,14 @@ static void convertMaterial(const Material *mat, ModelMaterial *out) {
     }
 }
 
+
+// ---------------------- Blend Weights ------------------------
+
+struct BlendWeight {
+    u32 index;
+    f32 weight;
+};
+
 static int computeBlendWeightCount(const Skin *skin, int nVerts) {
     int *refCounts = new int[nVerts];
     memset(refCounts, 0, nVerts * sizeof(int));
@@ -259,11 +281,6 @@ static int computeBlendWeightCount(const Skin *skin, int nVerts) {
     printf("Max blend weights: %d\n", max);
     return max;
 }
-
-struct BlendWeight {
-    u32 index;
-    f32 weight;
-};
 
 static BlendWeight *computeBlendWeights(const Skin *skin, int nVertWeights, int nVerts) {
     int totalWeights = nVertWeights * nVerts;
@@ -321,11 +338,16 @@ static BlendWeight *computeBlendWeights(const Skin *skin, int nVertWeights, int 
     return data;
 }
 
+
+
 static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
     int nMesh = scene->getMeshCount();
     for (int c = 0; c < nMesh; c++) {
         const Mesh *mesh = scene->getMesh(c);
+        if (opts->dumpMeshes) dumpObject(stdout, mesh);
+
         const Geometry *geom = mesh->getGeometry();
+        if (opts->dumpGeom) dumpObject(stdout, geom);
 
         dumpMatrix(geom->getGlobalTransform());
         int nVerts = geom->getVertexCount();
@@ -360,7 +382,7 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
         for (int c = 0; c < nMaterials; c++) {
             const Material *mat = mesh->getMaterial(c);
             if (opts->dumpMaterials) {
-                dumpMaterial(stdout, mat);
+                dumpObject(stdout, mat);
             }
             model->materials.emplace_back();
             ModelMaterial *modelMaterial = &model->materials.back();
