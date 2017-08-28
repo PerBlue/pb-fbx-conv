@@ -37,12 +37,22 @@ static ModelMesh *findOrCreateMesh(Model *model, Attributes attributes, u32 vert
     return mesh;
 }
 
-static int hashVertex(float *vert, int vertSize) {
+static inline int hashVertex(float *vert, int vertSize) {
     int h = 0;
     for (int c = 0; c < vertSize; c++) {
-        h += 31 * *(int *) &vert[c];
+        int bits = *(int *) &vert[c];
+        h += 31 * (bits >> 8); // don't hash the bottom bits, we want loose equality checks.
     }
     return h;
+}
+
+static inline bool checkVertexEquality(float *a, float *b, int vertSize) {
+    for (int c = 0; c < vertSize; c++) {
+        int ia = *(int *) &a[c];
+        int ib = *(int *) &b[c];
+        if (ia >> 8 != ib >> 8) return false;
+    }
+    return true;
 }
 
 static void findName(const Object *node, const char *type, std::string &out) {
@@ -588,16 +598,25 @@ static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
 static u16 addVertex(ModelMesh *mesh, float *vertex) {
     int vSize = mesh->vertexSize;
 
-    // TODO: Hash and check for existing
+    // hash and check for existing
+    size_t end = mesh->vertices.size();
+    u32 index = u32(end) / u32(vSize);
+    assert (index < 65536);
+    int hash = hashVertex(vertex, vSize);
+    for (u32 c = 0, pos = 0; c < index; c++, pos += vSize) {
+        if (mesh->vertexHashes[c] == hash) {
+            if (checkVertexEquality(vertex, &mesh->vertices[pos], vSize)) {
+                return u16(c);
+            }
+        }
+    }
 
     // add a new vertex
-    size_t position = mesh->vertices.size();
-    mesh->vertices.resize(position + vSize);
-    float *newVertex = &mesh->vertices[position];
+    mesh->vertices.resize(end + vSize);
+    float *newVertex = &mesh->vertices[end];
     memcpy(newVertex, vertex, vSize * sizeof(float));
+    mesh->vertexHashes[index] = hash;
 
-    u32 index = u32(position) / u32(vSize);
-    assert (index < 65536);
     return u16(index);
 }
 

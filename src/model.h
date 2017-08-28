@@ -80,6 +80,7 @@ struct MeshPart {
 struct ModelMesh {
     Attributes attributes;
     u16 vertexSize;
+    int vertexHashes[65536]; // small enough that we can just put all of it here.
     std::vector<float> vertices;
     std::vector<MeshPart> parts;
 };
