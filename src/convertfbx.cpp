@@ -574,7 +574,7 @@ static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
     // TODO: Packed color
 
     if (attrs & ATTR_TANGENT) {
-        fetch(pos, data->tangents[vertexIndex]);
+        fetch(pos, mul(&data->normalTransform, data->tangents[vertexIndex]));
     }
     // TODO: Binormal
 
