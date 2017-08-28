@@ -725,6 +725,7 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
             builder << mp.id << '_' << partID;
             builder.str(mp.id);
 
+            mp.primitive = PRIMITIVETYPE_TRIANGLES;
             buildMesh(&data, outMesh, &mp.indices, partID);
 
             // TODO: Attach the nodes

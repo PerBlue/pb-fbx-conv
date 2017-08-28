@@ -51,6 +51,12 @@ typedef u32 Attributes;
 #define USAGE_REFLECTION    10
 typedef u32 Usage;
 
+#define PRIMITIVETYPE_POINTS		0
+#define PRIMITIVETYPE_LINES			1
+#define PRIMITIVETYPE_LINESTRIP		3
+#define PRIMITIVETYPE_TRIANGLES		4
+#define PRIMITIVETYPE_TRIANGLESTRIP	5
+
 struct ModelTexture {
     std::string id;
     std::string texturePath;
