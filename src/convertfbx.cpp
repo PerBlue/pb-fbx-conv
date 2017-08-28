@@ -7,6 +7,7 @@
 #include <cstring>
 #include "convertfbx.h"
 #include "dumpfbx.h"
+#include "mathutil.h"
 
 using namespace ofbx;
 
@@ -521,6 +522,8 @@ struct MeshData {
     Options *opts;
     Attributes attrs;
     int nVerts;
+    Matrix positionTransform;
+    Matrix normalTransform;
 
     const Vec3 *positions;
     const Vec3 *normals;
@@ -558,11 +561,11 @@ static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
     int attrs = data->attrs;
     float *pos = vertex;
     if (attrs & ATTR_POSITION) {
-        fetch(pos, data->positions[vertexIndex]);
+        fetch(pos, mul(&data->positionTransform, data->positions[vertexIndex]));
     }
 
     if (attrs & ATTR_NORMAL) {
-        fetch(pos, data->normals[vertexIndex]);
+        fetch(pos, mul(&data->normalTransform, data->normals[vertexIndex]));
     }
 
     if (attrs & ATTR_COLOR) {
@@ -655,8 +658,15 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
         if (opts->dumpGeom) dumpObject(stdout, geom);
 
         dumpMatrix(geom->getGlobalTransform());
+        dumpMatrix(mesh->getGeometricMatrix());
+
 
         MeshData data;
+        Matrix globalTf = geom->getGlobalTransform();
+        Matrix geomTf = mesh->getGeometricMatrix();
+        data.positionTransform = mul(&globalTf, &geomTf);
+        calculateNormalFromTransform(&data.positionTransform, &data.normalTransform);
+
         data.opts = opts;
         data.nVerts = geom->getVertexCount();
 

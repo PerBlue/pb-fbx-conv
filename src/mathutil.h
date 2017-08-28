@@ -22,8 +22,26 @@ static ofbx::Vec3 mul(const ofbx::Matrix *mat, ofbx::Vec3 vec) {
     return out;
 }
 
+static ofbx::Matrix mul(const ofbx::Matrix *a, const ofbx::Matrix *b) {
+    ofbx::Matrix result = {0};
+    double *outCol = result.m;
+    const double *inCol = b->m;
+    for (int d = 0; d < 4; d++) {
+        for (int c = 0; c < 4; c++) {
+            double component = inCol[c];
+            outCol[0] += a->m[c+ 0] * component;
+            outCol[1] += a->m[c+ 4] * component;
+            outCol[2] += a->m[c+ 8] * component;
+            outCol[3] += a->m[c+12] * component;
+        }
+        outCol += 4;
+        inCol += 4;
+    }
+    return result;
+}
+
 static void extractTransform(const ofbx::Matrix *mat, float *translation, float *rotation, float *scale) {
-    double (&m)[16] = mat->m;
+    const double (&m)[16] = mat->m;
 
     double sx = sqrt(m[0] * m[0] + m[1] * m[1] + m[2] * m[2]);
     double sy = sqrt(m[4] * m[4] + m[5] * m[5] + m[6] * m[6]);
@@ -52,7 +70,7 @@ static void extractTransform(const ofbx::Matrix *mat, float *translation, float 
     double rzz = m[10] * isz;
 
     double qw = sqrt(1.0 + rxx + ryy + rzz) / 2;
-    double iw4 = 1f / (qw * 4);
+    double iw4 = 1.0 / (qw * 4);
     double qx = (rzy - ryz) * iw4;
     double qy = (rxz - rzx) * iw4;
     double qz = (ryx - rxy) * iw4;
@@ -68,7 +86,7 @@ static bool invertMatrix(const ofbx::Matrix *mat, ofbx::Matrix *out)
     double inv[16], det;
     int i;
 
-    double (&m)[16] = mat->m;
+    const double (&m)[16] = mat->m;
 
     inv[0] = m[5]  * m[10] * m[15] -
              m[5]  * m[11] * m[14] -
@@ -193,6 +211,37 @@ static bool invertMatrix(const ofbx::Matrix *mat, ofbx::Matrix *out)
         out->m[i] = inv[i] * det;
 
     return true;
+}
+
+static void transpose(ofbx::Matrix *mat) {
+    std::swap(mat->m[1], mat->m[4]);
+    std::swap(mat->m[2], mat->m[8]);
+    std::swap(mat->m[3], mat->m[12]);
+    std::swap(mat->m[6], mat->m[9]);
+    std::swap(mat->m[7], mat->m[13]);
+    std::swap(mat->m[11], mat->m[14]);
+}
+
+// The covector transformation matrix is the inverse of the transpose of the rotation and scaling part of the vector transformation matrix.
+// This operation preserves the rotation from the original transformation but reverses the scale for use with covectors.
+static void calculateNormalFromTransform(const ofbx::Matrix *transform, ofbx::Matrix *normal) {
+    ofbx::Matrix tmp = *transform;
+    // zero translation and projection
+    tmp.m[3] = tmp.m[7] = tmp.m[11] = 0;
+    tmp.m[12] = tmp.m[13] = tmp.m[14] = 0;
+    tmp.m[15] = 1;
+    invertMatrix(&tmp, normal);
+    transpose(normal);
+}
+
+static void normalize(ofbx::Vec3 *vec) {
+    double len = sqrt(vec->x * vec->x + vec->y * vec->y + vec->z * vec->z);
+    if (len != 0) {
+        double ilen = 1.0 / len;
+        vec->x *= ilen;
+        vec->y *= ilen;
+        vec->z *= ilen;
+    }
 }
 
 #endif //PB_FBX_CONV_MATHUTIL_H
