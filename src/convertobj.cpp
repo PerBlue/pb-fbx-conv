@@ -13,6 +13,7 @@ void convertFbxToObj(const IScene *scene, const char *filename) {
         printf("Error: Could not dump obj to %s (can't fopen)\n", filename);
         return;
     }
+    printf("Dumping OBJ to %s\n", filename);
 
     int obj_idx = 0;
     int mesh_count = scene->getMeshCount();

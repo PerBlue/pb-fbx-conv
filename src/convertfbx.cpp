@@ -440,7 +440,17 @@ static int findOrCreateMeshPart(std::vector<PreMeshPart> &parts, int material, B
     return int(part - &parts[0]);
 }
 
-static int *assignTrisToParts(const int *materials, BlendWeight *weights, int nVertWeights, int nVerts, std::vector<PreMeshPart> &parts) {
+static int findMaterialForTri(const int *materials) {
+    for (int k = 0; k < 3; k++) {
+        if (materials[k] >= 0) {
+            return materials[k];
+        }
+    }
+    return 0; // use the default material, I guess.
+}
+
+static int *assignTrisToPartsFromSkin(const int *materials, BlendWeight *weights, int nVertWeights, int nVerts,
+                                      std::vector<PreMeshPart> &parts) {
     // TODO: This is a really nasty optimization problem that I'm going to ignore for now.
     // The problem is as follows:
     // We have a bunch of polygons; each polygon has a set of up to nVertWeights bones on which it depends.
@@ -459,12 +469,7 @@ static int *assignTrisToParts(const int *materials, BlendWeight *weights, int nV
         int material = 0;
         // find the material
         if (materials) {
-            for (int k = 0; k < 3; k++) {
-                if (materials[k] > 0) {
-                    material = materials[k];
-                    break;
-                }
-            }
+            material = findMaterialForTri(materials);
         }
 
         trisToParts[c] = findOrCreateMeshPart(parts, material, weights, nVertWeights);
@@ -478,6 +483,148 @@ static int *assignTrisToParts(const int *materials, BlendWeight *weights, int nV
     return trisToParts;
 }
 
+static int *assignTrisToPartsFromMaterials(const int *materials, int nVerts, std::vector<PreMeshPart> &parts) {
+    int nTris = nVerts / 3;
+    int *trisToParts = new int[nTris];
+
+    for (int c = 0; c < nTris; c++) {
+        int material = findMaterialForTri(materials);
+        int index = -1;
+        for (PreMeshPart &part : parts) {
+            if (part.material == material) {
+                index = int(&part - &parts[0]);
+                break;
+            }
+        }
+        if (index < 0) {
+            parts.emplace_back(material);
+            index = int(parts.size() - 1);
+        }
+        trisToParts[c] = index;
+        materials += 3;
+    }
+
+    return trisToParts;
+}
+
+struct MeshData {
+    Options *opts;
+    Attributes attrs;
+    int nVerts;
+
+    const Vec3 *positions;
+    const Vec3 *normals;
+    const Vec2 *texCoords;
+    const Vec4 *colors;
+    const Vec3 *tangents;
+    const int *materials;
+    const Skin *skin;
+    int nBlendWeights = 0;
+    BlendWeight *blendWeights = nullptr;
+    int *trisToParts = nullptr;
+    std::vector<PreMeshPart> parts;
+};
+
+static inline void fetch(float *&pos, const Vec2 &vec) {
+    pos[0] = (float) vec.x;
+    pos[1] = (float) vec.y;
+    pos += 2;
+}
+static inline void fetch(float *&pos, const Vec3 &vec) {
+    pos[0] = (float) vec.x;
+    pos[1] = (float) vec.y;
+    pos[2] = (float) vec.z;
+    pos += 3;
+}
+static inline void fetch(float *&pos, const Vec4 &vec) {
+    pos[0] = (float) vec.x;
+    pos[1] = (float) vec.y;
+    pos[2] = (float) vec.z;
+    pos[3] = (float) vec.w;
+    pos += 4;
+}
+
+static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
+    int attrs = data->attrs;
+    float *pos = vertex;
+    if (attrs & ATTR_POSITION) {
+        fetch(pos, data->positions[vertexIndex]);
+    }
+
+    if (attrs & ATTR_NORMAL) {
+        fetch(pos, data->normals[vertexIndex]);
+    }
+
+    if (attrs & ATTR_COLOR) {
+        fetch(pos, data->colors[vertexIndex]);
+    }
+    // TODO: Packed color
+
+    if (attrs & ATTR_TANGENT) {
+        fetch(pos, data->tangents[vertexIndex]);
+    }
+    // TODO: Binormal
+
+    // For now we only support one tex coord.
+    if (attrs & ATTR_TEXCOORD0) {
+        fetch(pos, data->texCoords[vertexIndex]);
+    }
+
+    int nVertWeights = data->nBlendWeights;
+    BlendWeight *weights = data->blendWeights + vertexIndex * nVertWeights;
+    for (int c = 0; c < nVertWeights; c++) {
+        BlendWeight weight = weights[c];
+        if (weight.index < 0) {
+            pos[0] = 0;
+            pos[1] = 0;
+        } else {
+            pos[0] = (float) weight.index; // TODO: Should this be a reinterpret cast?
+            pos[1] = weight.weight;
+        }
+        pos += 2;
+    }
+}
+
+static u16 addVertex(ModelMesh *mesh, float *vertex) {
+    int vSize = mesh->vertexSize;
+
+    // TODO: Hash and check for existing
+
+    // add a new vertex
+    size_t position = mesh->vertices.size();
+    mesh->vertices.resize(position + vSize);
+    float *newVertex = &mesh->vertices[position];
+    memcpy(newVertex, vertex, vSize * sizeof(float));
+
+    u32 index = u32(position) / u32(vSize);
+    assert (index < 65536);
+    return u16(index);
+}
+
+static void buildMesh(MeshData *data, ModelMesh *mesh, std::vector<u16> *indices, int partID) {
+    float vertex[MAX_VERTEX_SIZE];
+    int nTris = data->nVerts / 3;
+    int *trisToParts = data->trisToParts;
+
+    for (int c = 0, v = 0; c < nTris; c++, v += 3) {
+        if (trisToParts != nullptr && trisToParts[c] != partID) continue;
+
+        u16 index;
+
+        fetchVertex(data, v+0, vertex);
+        index = addVertex(mesh, vertex);
+        indices->push_back(index);
+
+        fetchVertex(data, v+1, vertex);
+        index = addVertex(mesh, vertex);
+        indices->push_back(index);
+
+        fetchVertex(data, v+2, vertex);
+        index = addVertex(mesh, vertex);
+        indices->push_back(index);
+    }
+}
+
 
 static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
     int nMesh = scene->getMeshCount();
@@ -489,38 +636,45 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
         if (opts->dumpGeom) dumpObject(stdout, geom);
 
         dumpMatrix(geom->getGlobalTransform());
-        int nVerts = geom->getVertexCount();
 
-        const Vec3 *positions = geom->getVertices();
-        const Vec3 *normals = geom->getNormals();
-        const Vec2 *texCoords = geom->getUVs();
-        const Vec4 *colors = geom->getColors();
-        const Vec3 *tangents = geom->getTangents();
-        const int *materials = geom->getMaterials();
-        const Skin *skin = geom->getSkin();
-        int nBlendWeights = 0;
-        BlendWeight *blendWeights = nullptr;
-        int *trisToParts = nullptr;
-        std::vector<PreMeshPart> parts;
+        MeshData data;
+        data.opts = opts;
+        data.nVerts = geom->getVertexCount();
 
-        Attributes attrs = 0;
-        if (positions) attrs |= ATTR_POSITION;
-        if (normals)   attrs |= ATTR_NORMAL;
-        if (colors)    attrs |= ATTR_COLOR; // TODO: Pack colors
-        if (tangents)  attrs |= ATTR_TANGENT;
-        if (texCoords) attrs |= ATTR_TEXCOORD0;
-        if (skin) {
-            nBlendWeights = computeBlendWeightCount(skin, nVerts, opts->maxBlendWeights);
-            if (nBlendWeights > MAX_BLEND_WEIGHTS) nBlendWeights = MAX_BLEND_WEIGHTS;
-            if (nBlendWeights > 0) {
-                for (int c = 0; c < nBlendWeights; c++) {
-                    attrs |= ATTR_BLENDWEIGHT0 << c;
+        data.positions = geom->getVertices();
+        data.normals = geom->getNormals();
+        data.texCoords = geom->getUVs();
+        data.colors = geom->getColors();
+        data.tangents = geom->getTangents();
+        data.materials = geom->getMaterials();
+        data.skin = geom->getSkin();
+
+        data.attrs = 0;
+        if (data.positions) data.attrs |= ATTR_POSITION;
+        if (data.normals)   data.attrs |= ATTR_NORMAL;
+        if (data.colors)    data.attrs |= ATTR_COLOR; // TODO: Pack colors
+        if (data.tangents)  data.attrs |= ATTR_TANGENT;
+        if (data.texCoords) data.attrs |= ATTR_TEXCOORD0;
+        if (data.skin) {
+            data.nBlendWeights = computeBlendWeightCount(data.skin, data.nVerts, opts->maxBlendWeights);
+            if (data.nBlendWeights > MAX_BLEND_WEIGHTS) data.nBlendWeights = MAX_BLEND_WEIGHTS;
+            if (data.nBlendWeights > 0) {
+                for (int c = 0; c < data.nBlendWeights; c++) {
+                    data.attrs |= ATTR_BLENDWEIGHT0 << c;
                 }
-                blendWeights = computeBlendWeights(skin, nBlendWeights, nVerts);
+                data.blendWeights = computeBlendWeights(data.skin, data.nBlendWeights, data.nVerts);
             }
-
-            trisToParts = assignTrisToParts(materials, blendWeights, nBlendWeights, nVerts, parts);
         }
+
+        if (data.blendWeights) {
+            // handles null materials
+            data.trisToParts = assignTrisToPartsFromSkin(data.materials, data.blendWeights, data.nBlendWeights, data.nVerts, data.parts);
+        } else if (data.materials) {
+            data.trisToParts = assignTrisToPartsFromMaterials(data.materials, data.nVerts, data.parts);
+        } else {
+            data.parts.emplace_back(0);
+        }
+
 
         int nMaterials = mesh->getMaterialCount();
         for (int c = 0; c < nMaterials; c++) {
@@ -534,14 +688,37 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
         }
 
 
-        ModelMesh *outMesh = findOrCreateMesh(model, attrs, nVerts);
+        ModelMesh *outMesh = findOrCreateMesh(model, data.attrs, data.nVerts);
         std::vector<float> *verts = &outMesh->vertices;
-        verts->reserve(verts->size() + nVerts * outMesh->vertexSize);
+        verts->reserve(verts->size() + data.nVerts * outMesh->vertexSize);
+
+        // reify the mesh parts
+        outMesh->parts.reserve(outMesh->parts.size() + data.parts.size());
+        int partID = 0;
+        for (PreMeshPart &part : data.parts) {
+            // make a mesh part
+            outMesh->parts.emplace_back();
+            MeshPart &mp = outMesh->parts.back();
+
+            // give it a meaningful name
+            findName(mesh, "Model", mp.id);
+            std::stringstream builder;
+            builder << mp.id << '_' << partID;
+            builder.str(mp.id);
+
+            buildMesh(&data, outMesh, &mp.indices, partID);
+
+            // TODO: Attach the nodes
+            // TODO: Attach the material
+            partID++;
+        }
+
+        //verts->
 
 
         // delete [] nullptr is defined and has no effect.
-        delete [] blendWeights;
-        delete [] trisToParts;
+        delete [] data.blendWeights;
+        delete [] data.trisToParts;
     }
 }
 

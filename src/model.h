@@ -140,4 +140,6 @@ inline u16 calculateVertexOffset(Attributes attributes, Attributes attribute) {
     return calculateVertexSize(attrsBefore);
 }
 
+static int MAX_VERTEX_SIZE = calculateVertexSize(~Attributes(0));
+
 #endif //PB_FBX_CONV_MODEL_H
