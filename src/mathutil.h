@@ -25,17 +25,19 @@ static ofbx::Vec3 mul(const ofbx::Matrix *mat, ofbx::Vec3 vec) {
 static ofbx::Matrix mul(const ofbx::Matrix *a, const ofbx::Matrix *b) {
     ofbx::Matrix result = {0};
     double *outCol = result.m;
-    const double *inCol = b->m;
+    const double *bCol = b->m;
     for (int d = 0; d < 4; d++) {
+        const double *aCol = a->m;
         for (int c = 0; c < 4; c++) {
-            double component = inCol[c];
-            outCol[0] += a->m[c+ 0] * component;
-            outCol[1] += a->m[c+ 4] * component;
-            outCol[2] += a->m[c+ 8] * component;
-            outCol[3] += a->m[c+12] * component;
+            double component = bCol[c];
+            outCol[0] += aCol[0] * component;
+            outCol[1] += aCol[1] * component;
+            outCol[2] += aCol[2] * component;
+            outCol[3] += aCol[3] * component;
+            aCol += 4;
         }
         outCol += 4;
-        inCol += 4;
+        bCol += 4;
     }
     return result;
 }

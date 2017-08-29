@@ -18,7 +18,7 @@ const int bufsize = 128;
 
 static void dumpMatrix(Matrix mat) {
     for (int n = 0; n < 4; n++) {
-        printf("%.2f, %.2f, %.2f, %.2f\n", mat.m[n+0], mat.m[n+4], mat.m[n+8], mat.m[n+12]);
+        printf("%7.6f, %7.6f, %7.6f, %7.6f\n", mat.m[n+0], mat.m[n+4], mat.m[n+8], mat.m[n+12]);
     }
 }
 
@@ -565,7 +565,9 @@ static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
     }
 
     if (attrs & ATTR_NORMAL) {
-        fetch(pos, mul(&data->normalTransform, data->normals[vertexIndex]));
+        Vec3 normal = mul(&data->normalTransform, data->normals[vertexIndex]);
+        normalize(&normal);
+        fetch(pos, normal);
     }
 
     if (attrs & ATTR_COLOR) {
@@ -657,15 +659,15 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
         const Geometry *geom = mesh->getGeometry();
         if (opts->dumpGeom) dumpObject(stdout, geom);
 
-        dumpMatrix(geom->getGlobalTransform());
-        dumpMatrix(mesh->getGeometricMatrix());
-
-
         MeshData data;
         Matrix globalTf = geom->getGlobalTransform();
         Matrix geomTf = mesh->getGeometricMatrix();
         data.positionTransform = mul(&globalTf, &geomTf);
         calculateNormalFromTransform(&data.positionTransform, &data.normalTransform);
+        dumpMatrix(globalTf);
+        dumpMatrix(geomTf);
+        dumpMatrix(data.positionTransform);
+        dumpMatrix(data.normalTransform);
 
         data.opts = opts;
         data.nVerts = geom->getVertexCount();
