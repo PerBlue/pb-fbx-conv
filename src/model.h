@@ -91,9 +91,17 @@ struct ModelMesh {
     std::vector<MeshPart> parts;
 };
 
+struct BoneBinding {
+    std::string nodeID;
+    float translation[3];
+    float rotation[4];
+    float scale[3];
+};
+
 struct NodePart {
-    MeshPart *meshPart;
-    ModelMaterial *material;
+    std::string meshPartID;
+    std::string materialID;
+    std::vector<BoneBinding> bones;
 };
 
 struct Node {
@@ -109,7 +117,7 @@ struct Animation {
     std::string id;
     u32 stride;
     u32 frames;
-    std::vector<Node *> nodes;
+    std::vector<std::string> nodeIDs;
     std::vector<u32> nodeFormats;
     std::vector<f32> nodeData;
 };

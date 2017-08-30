@@ -59,9 +59,9 @@ static inline bool checkVertexEquality(float *a, float *b, int vertSize) {
 static void findName(const Object *node, const char *type, std::string &out) {
     if (node->name[0]) out = &node->name[0];
     else {
-        std::ostringstream stream;
+        std::stringstream stream;
         stream << type << node->id;
-        stream.str(out);
+        out = stream.str();
     }
 }
 
@@ -96,6 +96,39 @@ static int getFloats(float *buf, int num, const IElementProperty *prop) {
     }
     return c;
 }
+
+struct PreMeshPart {
+    int nodes[MAX_BLEND_WEIGHTS];
+    int material;
+    PreMeshPart(int material) : material(material) {
+        memset(nodes, -1, sizeof(nodes));
+    }
+};
+
+struct BlendWeight {
+    s32 index = -1;
+    f32 weight = 0;
+};
+
+struct MeshData {
+    Options *opts;
+    Attributes attrs;
+    int nVerts;
+    Matrix positionTransform;
+    Matrix normalTransform;
+
+    const Vec3 *positions;
+    const Vec3 *normals;
+    const Vec2 *texCoords;
+    const Vec4 *colors;
+    const Vec3 *tangents;
+    const int *materials;
+    const Skin *skin;
+    int nBlendWeights = 0;
+    BlendWeight *blendWeights = nullptr;
+    int *trisToParts = nullptr;
+    std::vector<PreMeshPart> parts;
+};
 
 
 // ---------------------- Materials ------------------------
@@ -258,13 +291,42 @@ static void convertMaterial(const Material *mat, ModelMaterial *out) {
     }
 }
 
+static int findMaterialForTri(const int *materials) {
+    for (int k = 0; k < 3; k++) {
+        if (materials[k] >= 0) {
+            return materials[k];
+        }
+    }
+    return 0; // use the default material, I guess.
+}
+
+static int *assignTrisToPartsFromMaterials(const int *materials, int nVerts, std::vector<PreMeshPart> &parts) {
+    int nTris = nVerts / 3;
+    int *trisToParts = new int[nTris];
+
+    for (int c = 0; c < nTris; c++) {
+        int material = findMaterialForTri(materials);
+        int index = -1;
+        for (PreMeshPart &part : parts) {
+            if (part.material == material) {
+                index = int(&part - &parts[0]);
+                break;
+            }
+        }
+        if (index < 0) {
+            parts.emplace_back(material);
+            index = int(parts.size() - 1);
+        }
+        trisToParts[c] = index;
+        materials += 3;
+    }
+
+    return trisToParts;
+}
+
+
 
 // ---------------------- Blend Weights ------------------------
-
-struct BlendWeight {
-    s32 index = -1;
-    f32 weight = 0;
-};
 
 static int computeBlendWeightCount(const Skin *skin, int nVerts, int maxBlendWeights) {
     int *refCounts = new int[nVerts];
@@ -357,14 +419,6 @@ static BlendWeight *computeBlendWeights(const Skin *skin, int nVertWeights, int 
     return data;
 }
 
-struct PreMeshPart {
-    int nodes[MAX_BLEND_WEIGHTS];
-    int material;
-    PreMeshPart(int material) : material(material) {
-        memset(nodes, -1, sizeof(nodes));
-    }
-};
-
 struct PolyBlendWeight {
     s32 index = -1;
     f32 weight = 0;
@@ -451,15 +505,6 @@ static int findOrCreateMeshPart(std::vector<PreMeshPart> &parts, int material, B
     return int(part - &parts[0]);
 }
 
-static int findMaterialForTri(const int *materials) {
-    for (int k = 0; k < 3; k++) {
-        if (materials[k] >= 0) {
-            return materials[k];
-        }
-    }
-    return 0; // use the default material, I guess.
-}
-
 static int *assignTrisToPartsFromSkin(const int *materials, BlendWeight *weights, int nVertWeights, int nVerts,
                                       std::vector<PreMeshPart> &parts) {
     // TODO: This is a really nasty optimization problem that I'm going to ignore for now.
@@ -494,49 +539,39 @@ static int *assignTrisToPartsFromSkin(const int *materials, BlendWeight *weights
     return trisToParts;
 }
 
-static int *assignTrisToPartsFromMaterials(const int *materials, int nVerts, std::vector<PreMeshPart> &parts) {
-    int nTris = nVerts / 3;
-    int *trisToParts = new int[nTris];
+static void addBones(MeshData *data, PreMeshPart *part, NodePart *np, const Matrix *geometryMatrix) {
+    if (part->nodes[0] < 0) return; // no bones
+    const Skin *skin = data->skin;
+    if (!skin) return;
 
-    for (int c = 0; c < nTris; c++) {
-        int material = findMaterialForTri(materials);
-        int index = -1;
-        for (PreMeshPart &part : parts) {
-            if (part.material == material) {
-                index = int(&part - &parts[0]);
-                break;
-            }
-        }
-        if (index < 0) {
-            parts.emplace_back(material);
-            index = int(parts.size() - 1);
-        }
-        trisToParts[c] = index;
-        materials += 3;
+    int maxBones = data->nBlendWeights;
+    int nBonesUsed = 0;
+    while (nBonesUsed < maxBones && part->nodes[nBonesUsed] >= 0) nBonesUsed++;
+
+    np->bones.resize(nBonesUsed);
+    for (int c = 0; c < nBonesUsed; c++) {
+        BoneBinding *bone = &np->bones[c];
+        int clusterIndex = part->nodes[c];
+        const Cluster *cluster = skin->getCluster(clusterIndex);
+        const Object *link = cluster->getLink(); // the node which represents this bone
+        assert(link->isNode());
+        findName(link, "Node", bone->nodeID);
+
+        // calculate the inverse bind pose
+        Matrix clusterTransform = cluster->getTransformMatrix();
+        Matrix clusterLinkTransform = cluster->getTransformLinkMatrix();
+        Matrix clusterGeom = mul(&clusterTransform, geometryMatrix);
+        Matrix invLinkTransform;
+        invertMatrix(&clusterLinkTransform, &invLinkTransform);
+        Matrix bindPose = mul(&invLinkTransform, &clusterGeom);
+        Matrix invBindPose;
+        invertMatrix(&bindPose, &invBindPose);
+        extractTransform(&invBindPose, bone->translation, bone->rotation, bone->scale);
     }
-
-    return trisToParts;
 }
 
-struct MeshData {
-    Options *opts;
-    Attributes attrs;
-    int nVerts;
-    Matrix positionTransform;
-    Matrix normalTransform;
 
-    const Vec3 *positions;
-    const Vec3 *normals;
-    const Vec2 *texCoords;
-    const Vec4 *colors;
-    const Vec3 *tangents;
-    const int *materials;
-    const Skin *skin;
-    int nBlendWeights = 0;
-    BlendWeight *blendWeights = nullptr;
-    int *trisToParts = nullptr;
-    std::vector<PreMeshPart> parts;
-};
+// ---------------------- Vertices ------------------------
 
 static inline void fetch(float *&pos, const Vec2 &vec) {
     pos[0] = (float) vec.x;
@@ -651,118 +686,148 @@ static void buildMesh(MeshData *data, ModelMesh *mesh, std::vector<u16> *indices
 
 
 
-static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
-    int nMesh = scene->getMeshCount();
-    for (int c = 0; c < nMesh; c++) {
-        const Mesh *mesh = scene->getMesh(c);
-        if (opts->dumpMeshes) {
-            dumpElement(stdout, &mesh->element, 2);
-            dumpElementRecursive(stdout, mesh->element.getFirstChild(), 4);
-        }
+static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, Model *model, Options *opts) {
+    if (opts->dumpMeshes) {
+        dumpElement(stdout, &mesh->element, 2);
+        dumpElementRecursive(stdout, mesh->element.getFirstChild(), 4);
+    }
 
-        const Geometry *geom = mesh->getGeometry();
-        if (opts->dumpGeom) {
-            dumpElement(stdout, &geom->element, 2);
-            dumpElementRecursive(stdout, geom->element.getFirstChild(), 4);
-        }
+    const Geometry *geom = mesh->getGeometry();
+    if (opts->dumpGeom) {
+        dumpElement(stdout, &geom->element, 2);
+        dumpElementRecursive(stdout, geom->element.getFirstChild(), 4);
+    }
 
-        MeshData data;
-        Matrix globalTf = geom->getGlobalTransform();
-        Matrix geomTf = mesh->getGeometricMatrix();
-        data.positionTransform = mul(&globalTf, &geomTf);
-        calculateNormalFromTransform(&data.positionTransform, &data.normalTransform);
-        dumpMatrix(globalTf);
-        dumpMatrix(geomTf);
-        dumpMatrix(data.positionTransform);
-        dumpMatrix(data.normalTransform);
+    MeshData data;
+    Matrix globalTf = geom->getGlobalTransform();
+    Matrix geomTf = mesh->getGeometricMatrix();
+    data.positionTransform = mul(&globalTf, &geomTf);
+    calculateNormalFromTransform(&data.positionTransform, &data.normalTransform);
+    dumpMatrix(globalTf);
+    dumpMatrix(geomTf);
+    dumpMatrix(data.positionTransform);
+    dumpMatrix(data.normalTransform);
 
-        data.opts = opts;
-        data.nVerts = geom->getVertexCount();
+    data.opts = opts;
+    data.nVerts = geom->getVertexCount();
 
-        data.positions = geom->getVertices();
-        data.normals = geom->getNormals();
-        data.texCoords = geom->getUVs();
-        data.colors = geom->getColors();
-        data.tangents = geom->getTangents();
-        data.materials = geom->getMaterials();
-        data.skin = geom->getSkin();
+    data.positions = geom->getVertices();
+    data.normals = geom->getNormals();
+    data.texCoords = geom->getUVs();
+    data.colors = geom->getColors();
+    data.tangents = geom->getTangents();
+    data.materials = geom->getMaterials();
+    data.skin = geom->getSkin();
 
-        data.attrs = 0;
-        if (data.positions) data.attrs |= ATTR_POSITION;
-        if (data.normals)   data.attrs |= ATTR_NORMAL;
-        if (data.colors)    data.attrs |= ATTR_COLOR; // TODO: Pack colors
-        if (data.tangents)  data.attrs |= ATTR_TANGENT;
-        if (data.texCoords) data.attrs |= ATTR_TEXCOORD0;
-        if (data.skin) {
-            data.nBlendWeights = computeBlendWeightCount(data.skin, data.nVerts, opts->maxBlendWeights);
-            if (data.nBlendWeights > MAX_BLEND_WEIGHTS) data.nBlendWeights = MAX_BLEND_WEIGHTS;
-            if (data.nBlendWeights > 0) {
-                for (int c = 0; c < data.nBlendWeights; c++) {
-                    data.attrs |= ATTR_BLENDWEIGHT0 << c;
-                }
-                data.blendWeights = computeBlendWeights(data.skin, data.nBlendWeights, data.nVerts);
+    data.attrs = 0;
+    if (data.positions) data.attrs |= ATTR_POSITION;
+    if (data.normals)   data.attrs |= ATTR_NORMAL;
+    if (data.colors)    data.attrs |= ATTR_COLOR; // TODO: Pack colors
+    if (data.tangents)  data.attrs |= ATTR_TANGENT;
+    if (data.texCoords) data.attrs |= ATTR_TEXCOORD0;
+    if (data.skin) {
+        data.nBlendWeights = computeBlendWeightCount(data.skin, data.nVerts, opts->maxBlendWeights);
+        if (data.nBlendWeights > MAX_BLEND_WEIGHTS) data.nBlendWeights = MAX_BLEND_WEIGHTS;
+        if (data.nBlendWeights > 0) {
+            for (int c = 0; c < data.nBlendWeights; c++) {
+                data.attrs |= ATTR_BLENDWEIGHT0 << c;
             }
+            data.blendWeights = computeBlendWeights(data.skin, data.nBlendWeights, data.nVerts);
         }
+    }
 
-        if (data.blendWeights) {
-            // handles null materials
-            data.trisToParts = assignTrisToPartsFromSkin(data.materials, data.blendWeights, data.nBlendWeights, data.nVerts, data.parts);
-        } else if (data.materials) {
-            data.trisToParts = assignTrisToPartsFromMaterials(data.materials, data.nVerts, data.parts);
-        } else {
-            data.parts.emplace_back(0);
+    if (data.blendWeights) {
+        // handles null materials
+        data.trisToParts = assignTrisToPartsFromSkin(data.materials, data.blendWeights, data.nBlendWeights, data.nVerts, data.parts);
+    } else if (data.materials) {
+        data.trisToParts = assignTrisToPartsFromMaterials(data.materials, data.nVerts, data.parts);
+    } else {
+        data.parts.emplace_back(0);
+    }
+
+
+    int nMaterials = mesh->getMaterialCount();
+    int baseIdx = model->materials.size();
+    model->materials.reserve(baseIdx + nMaterials);
+    for (int c = 0; c < nMaterials; c++) {
+        const Material *mat = mesh->getMaterial(c);
+        if (opts->dumpMaterials) {
+            dumpElement(stdout, &mat->element, 2);
+            dumpElementRecursive(stdout, mat->element.getFirstChild(), 4);
         }
+        model->materials.emplace_back();
+        ModelMaterial *modelMaterial = &model->materials.back();
+        convertMaterial(mat, modelMaterial);
+    }
 
 
-        int nMaterials = mesh->getMaterialCount();
-        for (int c = 0; c < nMaterials; c++) {
-            const Material *mat = mesh->getMaterial(c);
-            if (opts->dumpMaterials) {
-                dumpElement(stdout, &mat->element, 2);
-                dumpElementRecursive(stdout, mat->element.getFirstChild(), 4);
-            }
-            model->materials.emplace_back();
-            ModelMaterial *modelMaterial = &model->materials.back();
-            convertMaterial(mat, modelMaterial);
-        }
+    ModelMesh *outMesh = findOrCreateMesh(model, data.attrs, data.nVerts);
+    std::vector<float> *verts = &outMesh->vertices;
+    verts->reserve(verts->size() + data.nVerts * outMesh->vertexSize);
+
+    // reify the mesh parts
+    outMesh->parts.reserve(outMesh->parts.size() + data.parts.size());
+    int partID = 0;
+    for (PreMeshPart &part : data.parts) {
+        // make a mesh part
+        outMesh->parts.emplace_back();
+        MeshPart &mp = outMesh->parts.back();
+
+        // give it a name
+        findName(mesh, "Model", mp.id);
+        std::stringstream builder;
+        builder << mp.id << '_' << partID;
+        mp.id = builder.str();
+
+        // build the vertices and indices
+        mp.primitive = PRIMITIVETYPE_TRIANGLES;
+        buildMesh(&data, outMesh, &mp.indices, partID);
+
+        // attach rendering info to the node
+        node->parts.emplace_back();
+        NodePart *np = &node->parts.back();
+        np->meshPartID = mp.id;
+        np->materialID = model->materials[baseIdx + part.material].id;
+        addBones(&data, &part, np, &geomTf);
+
+        partID++;
+    }
 
 
-        ModelMesh *outMesh = findOrCreateMesh(model, data.attrs, data.nVerts);
-        std::vector<float> *verts = &outMesh->vertices;
-        verts->reserve(verts->size() + data.nVerts * outMesh->vertexSize);
+    // delete [] nullptr is defined and has no effect.
+    delete [] data.blendWeights;
+    delete [] data.trisToParts;
+}
 
-        // reify the mesh parts
-        outMesh->parts.reserve(outMesh->parts.size() + data.parts.size());
-        int partID = 0;
-        for (PreMeshPart &part : data.parts) {
-            // make a mesh part
-            outMesh->parts.emplace_back();
-            MeshPart &mp = outMesh->parts.back();
+static void convertNode(const IScene *scene, const Object *obj, Node *node, Model *model, Options *opts) {
+    findName(obj, "Node", node->id);
+    Matrix transform = obj->getGlobalTransform();
+    extractTransform(&transform, node->translation, node->rotation, node->scale);
 
-            // give it a meaningful name
-            findName(mesh, "Model", mp.id);
-            std::stringstream builder;
-            builder << mp.id << '_' << partID;
-            builder.str(mp.id);
-
-            mp.primitive = PRIMITIVETYPE_TRIANGLES;
-            buildMesh(&data, outMesh, &mp.indices, partID);
-
-            // TODO: Attach the nodes
-            // TODO: Attach the material
-            partID++;
-        }
-
-        //verts->
-
-
-        // delete [] nullptr is defined and has no effect.
-        delete [] data.blendWeights;
-        delete [] data.trisToParts;
+    switch (obj->getType()) {
+    case Object::Type::MESH:
+        const Mesh *mesh = dynamic_cast<const Mesh *>(obj);
+        convertMeshNode(scene, mesh, node, model, opts);
+        break;
+    // TODO: Other object types?
     }
 }
 
+static void convertChildrenRecursive(const IScene *scene, const Object *obj, Model *model, std::vector<Node> *nodeList, Options *opts) {
+    const Object *child;
+    for (int i = 0; (child = obj->resolveObjectLink(i)); i++) {
+        if (child->isNode()) {
+            nodeList->emplace_back();
+            Node *node = &nodeList->back();
+            convertNode(scene, child, node, model, opts);
+            convertChildrenRecursive(scene, child, model, &node->children, opts);
+        }
+    }
+
+}
+
 bool convertFbxToModel(const IScene *scene, Model *model, Options *opts) {
-    convertMeshes(scene, model, opts);
+    const Object *root = scene->getRoot();
+    convertChildrenRecursive(scene, root, model, &model->nodes, opts);
     return true;
 }
