@@ -114,8 +114,6 @@ struct MeshData {
     Options *opts;
     Attributes attrs;
     int nVerts;
-    Matrix positionTransform;
-    Matrix normalTransform;
 
     const Vec3 *positions;
     const Vec3 *normals;
@@ -596,13 +594,11 @@ static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
     int attrs = data->attrs;
     float *pos = vertex;
     if (attrs & ATTR_POSITION) {
-        fetch(pos, mul(&data->positionTransform, data->positions[vertexIndex]));
+        fetch(pos, data->positions[vertexIndex]);
     }
 
     if (attrs & ATTR_NORMAL) {
-        Vec3 normal = mul(&data->normalTransform, data->normals[vertexIndex]);
-        normalize(&normal);
-        fetch(pos, normal);
+        fetch(pos, data->normals[vertexIndex]);
     }
 
     if (attrs & ATTR_COLOR) {
@@ -611,7 +607,7 @@ static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
     // TODO: Packed color
 
     if (attrs & ATTR_TANGENT) {
-        fetch(pos, mul(&data->normalTransform, data->tangents[vertexIndex]));
+        fetch(pos, data->tangents[vertexIndex]);
     }
     // TODO: Binormal
 
@@ -699,14 +695,6 @@ static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, M
     }
 
     MeshData data;
-    Matrix globalTf = geom->getGlobalTransform();
-    Matrix geomTf = mesh->getGeometricMatrix();
-    data.positionTransform = mul(&globalTf, &geomTf);
-    calculateNormalFromTransform(&data.positionTransform, &data.normalTransform);
-    dumpMatrix(globalTf);
-    dumpMatrix(geomTf);
-    dumpMatrix(data.positionTransform);
-    dumpMatrix(data.normalTransform);
 
     data.opts = opts;
     data.nVerts = geom->getVertexCount();
@@ -747,7 +735,7 @@ static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, M
 
 
     int nMaterials = mesh->getMaterialCount();
-    int baseIdx = model->materials.size();
+    size_t baseIdx = model->materials.size();
     model->materials.reserve(baseIdx + nMaterials);
     for (int c = 0; c < nMaterials; c++) {
         const Material *mat = mesh->getMaterial(c);
@@ -766,6 +754,7 @@ static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, M
     verts->reserve(verts->size() + data.nVerts * outMesh->vertexSize);
 
     // reify the mesh parts
+    Matrix geomTf = mesh->getGeometricMatrix();
     outMesh->parts.reserve(outMesh->parts.size() + data.parts.size());
     int partID = 0;
     for (PreMeshPart &part : data.parts) {
