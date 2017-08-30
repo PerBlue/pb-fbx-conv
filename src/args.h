@@ -10,7 +10,9 @@
 struct Options {
     char *filepath = nullptr;
     char *outpath = nullptr;
-    bool dumpFbxTree = false;
+    bool dumpElementTree = false;
+    bool dumpObjectTree = false;
+    bool dumpNodeTree = false;
     bool dumpMaterials = false;
     bool dumpMeshes = false;
     bool dumpGeom = false;

@@ -2,5 +2,8 @@
 .idea/
 cmake-build-*/
 .DS_Store
-tree.out
+elements.out
+objects.out
+nodes.out
 geom.obj
+g3dbreference.h

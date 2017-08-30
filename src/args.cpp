@@ -10,8 +10,10 @@ static void printHelp(char *programName) {
     printf("Usage: %s [options] filename\n", programName);
     printf("Options:\n");
     printf("  -o outfile    specify the [o]utput file\n");
-    printf("  -B maxWeights specify the max number of [B]lend weights per vertex (default 8)");
-    printf("  -t            dump the fbx [t]ree to the file 'tree.out'\n");
+    printf("  -B maxWeights specify the max number of [B]lend weights per vertex (default 8)\n");
+    printf("  -t            dump the fbx object [t]ree to the file 'objects.out'\n");
+    printf("  -e            dump the fbx [e]lement tree to the file 'elements.out'\n");
+    printf("  -n            dump the fbx [n]ode tree to the file 'nodes.out'\n");
     printf("  -m            dump the raw [m]aterials to the console\n");
     printf("  -M            dump the raw [M]eshes to the console\n");
     printf("  -g            dump the raw [g]eometry to the console\n");
@@ -69,7 +71,13 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
         // handle unary args here
         switch (nextmode) {
             case 't':
-                opts->dumpFbxTree = true;
+                opts->dumpObjectTree = true;
+                break;
+            case 'e':
+                opts->dumpElementTree = true;
+                break;
+            case 'n':
+                opts->dumpNodeTree = true;
                 break;
             case 'm':
                 opts->dumpMaterials = true;

@@ -650,14 +650,21 @@ static void buildMesh(MeshData *data, ModelMesh *mesh, std::vector<u16> *indices
 }
 
 
+
 static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
     int nMesh = scene->getMeshCount();
     for (int c = 0; c < nMesh; c++) {
         const Mesh *mesh = scene->getMesh(c);
-        if (opts->dumpMeshes) dumpObject(stdout, mesh);
+        if (opts->dumpMeshes) {
+            dumpElement(stdout, &mesh->element, 2);
+            dumpElementRecursive(stdout, mesh->element.getFirstChild(), 4);
+        }
 
         const Geometry *geom = mesh->getGeometry();
-        if (opts->dumpGeom) dumpObject(stdout, geom);
+        if (opts->dumpGeom) {
+            dumpElement(stdout, &geom->element, 2);
+            dumpElementRecursive(stdout, geom->element.getFirstChild(), 4);
+        }
 
         MeshData data;
         Matrix globalTf = geom->getGlobalTransform();
@@ -711,7 +718,8 @@ static void convertMeshes(const IScene *scene, Model *model, Options *opts) {
         for (int c = 0; c < nMaterials; c++) {
             const Material *mat = mesh->getMaterial(c);
             if (opts->dumpMaterials) {
-                dumpObject(stdout, mat);
+                dumpElement(stdout, &mat->element, 2);
+                dumpElementRecursive(stdout, mat->element.getFirstChild(), 4);
             }
             model->materials.emplace_back();
             ModelMaterial *modelMaterial = &model->materials.back();

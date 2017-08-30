@@ -46,8 +46,16 @@ int main(int argc, char *argv[]) {
     }
 
     // print out the fbx tree
-    if (opts.dumpFbxTree) {
-        dumpFbx(scene);
+    if (opts.dumpElementTree) {
+        dumpElements(scene);
+    }
+
+    if (opts.dumpObjectTree) {
+        dumpObjects(scene);
+    }
+
+    if (opts.dumpNodeTree) {
+        dumpNodes(scene);
     }
 
     if (opts.dumpObj) {

@@ -26,7 +26,7 @@ static void catProperty(char str[elbuffersize], const IElementProperty *prop) {
 }
 
 // This has the schlemiel the painter problem, but it should be fast enough regardless.
-static void dumpElement(FILE *file, const IElement *e, int indent) {
+void dumpElement(FILE *file, const IElement *e, int indent) {
     char str[elbuffersize];
     int c = 0;
     for (; c < indent; c++) {
@@ -48,7 +48,7 @@ static void dumpElement(FILE *file, const IElement *e, int indent) {
     fprintf(file, "%s\n", str);
 }
 
-static void dumpElementRecursive(FILE *file, const IElement *e, int indent = indentation) {
+void dumpElementRecursive(FILE *file, const IElement *e, int indent) {
     while (e) {
         dumpElement(file, e, indent);
         dumpElementRecursive(file, e->getFirstChild(), indent + indentation);
@@ -56,22 +56,103 @@ static void dumpElementRecursive(FILE *file, const IElement *e, int indent = ind
     }
 }
 
-void dumpObject(FILE *file, const Object *mat, int indent) {
-    const IElement *el = &mat->element;
-    dumpElement(file, el, indent);
-    dumpElementRecursive(file, el->getFirstChild(), indent + indentation);
-}
-
-void dumpFbx(const IScene *scene) {
-    FILE *file = fopen("tree.out", "w");
+void dumpElements(const IScene *scene) {
+    FILE *file = fopen("elements.out", "w");
     if (file == nullptr) {
-        printf("Could not open file 'tree.out' (fopen returned nullptr). Continuing.");
+        printf("Could not open file 'elements.out' (fopen returned nullptr). Continuing.");
         return;
     }
 
-    printf("Dumping FBX tree to tree.out\n");
+    printf("Dumping FBX Element tree to elements.out\n");
     fprintf(file, "Elements:\n");
     const IElement *rootElement = scene->getRootElement();
     dumpElementRecursive(file, rootElement);
+    fclose(file);
+}
+
+void dumpObject(FILE *file, const Object *obj, int indent) {
+    char str[elbuffersize];
+
+    const char* label;
+    switch (obj->getType())
+    {
+        case Object::Type::GEOMETRY: label = "geometry"; break;
+        case Object::Type::MESH: label = "mesh"; break;
+        case Object::Type::MATERIAL: label = "material"; break;
+        case Object::Type::ROOT: label = "root"; break;
+        case Object::Type::TEXTURE: label = "texture"; break;
+        case Object::Type::NULL_NODE: label = "null"; break;
+        case Object::Type::LIMB_NODE: label = "limb node"; break;
+        case Object::Type::NODE_ATTRIBUTE: label = "node attribute"; break;
+        case Object::Type::CLUSTER: label = "cluster"; break;
+        case Object::Type::SKIN: label = "skin"; break;
+        case Object::Type::ANIMATION_STACK: label = "animation stack"; break;
+        case Object::Type::ANIMATION_LAYER: label = "animation layer"; break;
+        case Object::Type::ANIMATION_CURVE: label = "animation curve"; break;
+        case Object::Type::ANIMATION_CURVE_NODE: label = "animation curve node"; break;
+        default: label = "unknown"; break;
+    }
+
+    int c;
+    for (c = 0; c < indent; c++) {
+        str[c] = ' ';
+    }
+    str[c] = '\0';
+    strncat(str, label, elbuffersize - indent - 1);
+
+    if (obj->isNode()) {
+        fprintf(file, "%s N %s\n", str, obj->name);
+    } else {
+        fprintf(file, "%s %s\n", str, obj->name);
+    }
+}
+
+void dumpObjectRecursive(FILE *file, const Object *obj, int indent) {
+    dumpObject(file, obj, indent);
+    //dumpElement(file, &obj->element, indent);
+    if (obj->isNode()) {
+        const Object *child;
+        for (int i = 0; (child = obj->resolveObjectLink(i)); i++) {
+            dumpObjectRecursive(file, child, indent + indentation);
+        }
+    }
+}
+
+void dumpObjects(const IScene *scene) {
+    FILE *file = fopen("objects.out", "w");
+    if (file == nullptr) {
+        printf("Could not open file 'objects.out' (fopen returned nullptr). Continuing.");
+        return;
+    }
+
+    printf("Dumping FBX Object tree to objects.out\n");
+    fprintf(file, "Objects:\n");
+    const Object *rootElement = scene->getRoot();
+    dumpObjectRecursive(file, rootElement);
+    fclose(file);
+}
+
+
+void dumpNodeRecursive(FILE *file, const Object *obj, int indent) {
+    dumpObject(file, obj, indent);
+    const Object *child;
+    for (int i = 0; (child = obj->resolveObjectLink(i)); i++) {
+        if (child->isNode()) {
+            dumpNodeRecursive(file, child, indent + indentation);
+        }
+    }
+}
+
+void dumpNodes(const IScene *scene) {
+    FILE *file = fopen("nodes.out", "w");
+    if (file == nullptr) {
+        printf("Could not open file 'nodes.out' (fopen returned nullptr). Continuing.");
+        return;
+    }
+
+    printf("Dumping FBX Node tree to nodes.out\n");
+    fprintf(file, "Nodes:\n");
+    const Object *rootElement = scene->getRoot();
+    dumpNodeRecursive(file, rootElement);
     fclose(file);
 }

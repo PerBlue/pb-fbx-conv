@@ -7,8 +7,15 @@
 
 #include "ofbx.h"
 
+void dumpElements(const ofbx::IScene *scene);
+void dumpElementRecursive(FILE *file, const ofbx::IElement *element, int indent = 2);
+void dumpElement(FILE *file, const ofbx::IElement *element, int indent = 2);
+
+void dumpObjects(const ofbx::IScene *scene);
+void dumpObjectRecursive(FILE *file, const ofbx::Object *obj, int indent = 2);
 void dumpObject(FILE *file, const ofbx::Object *obj, int indent = 2);
 
-void dumpFbx(const ofbx::IScene *scene);
+void dumpNodes(const ofbx::IScene *scene);
+void dumpNodeRecursive(FILE *file, const ofbx::Object *obj, int indent = 2);
 
 #endif //PB_FBX_CONV_DUMPFBX_H
