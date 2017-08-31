@@ -790,8 +790,8 @@ static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, M
 
 static void convertNode(const IScene *scene, const Object *obj, Node *node, Model *model, Options *opts) {
     findName(obj, "Node", node->id);
-    Matrix transform = obj->getGlobalTransform();
-    extractTransform(&transform, node->translation, node->rotation, node->scale);
+    Matrix localTransform = obj->evalLocal(obj->getLocalTranslation(), obj->getLocalRotation());
+    extractTransform(&localTransform, node->translation, node->rotation, node->scale);
 
     switch (obj->getType()) {
     case Object::Type::MESH:

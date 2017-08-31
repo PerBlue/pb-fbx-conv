@@ -39,6 +39,12 @@
 // - calculateVertexSize(Attributes)
 typedef u32 Attributes;
 
+static const char *attributeNames[] = {
+        "POSITION", "NORMAL", "COLOR", "COLORPACKED", "TANGENT", "BINORMAL",
+        "TEXCOORD0", "TEXCOORD1", "TEXCOORD2", "TEXCOORD3", "TEXCOORD4", "TEXCOORD5", "TEXCOORD6", "TEXCOORD7",
+        "BLENDWEIGHT0", "BLENDWEIGHT1", "BLENDWEIGHT2", "BLENDWEIGHT3", "BLENDWEIGHT4", "BLENDWEIGHT5", "BLENDWEIGHT6", "BLENDWEIGHT7"
+};
+
 #define USAGE_NONE           1
 #define USAGE_DIFFUSE        2
 #define USAGE_EMISSIVE       3
@@ -51,11 +57,20 @@ typedef u32 Attributes;
 #define USAGE_REFLECTION    10
 typedef u32 Usage;
 
+static const char *textureTypes[] = {
+        "NONE", "NONE", "DIFFUSE", "EMISSIVE", "AMBIENT", "SPECULAR",
+        "SHININESS", "NORMAL", "BUMP", "TRANSPARENCY", "REFLECTION"
+};
+
 #define PRIMITIVETYPE_POINTS		0
 #define PRIMITIVETYPE_LINES			1
-#define PRIMITIVETYPE_LINESTRIP		3
-#define PRIMITIVETYPE_TRIANGLES		4
-#define PRIMITIVETYPE_TRIANGLESTRIP	5
+#define PRIMITIVETYPE_LINESTRIP		2
+#define PRIMITIVETYPE_TRIANGLES		3
+#define PRIMITIVETYPE_TRIANGLESTRIP	4
+
+static const char *primitiveNames[] = {
+        "POINTS", "LINES", "LINE_STRIP", "TRIANGLES", "TRIANGLE_STRIP"
+};
 
 struct ModelTexture {
     std::string id;

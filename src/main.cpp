@@ -12,6 +12,7 @@
 #include "dumpfbx.h"
 #include "args.h"
 #include "convertobj.h"
+#include "writep3db.h"
 
 Options opts;
 
@@ -68,6 +69,7 @@ int main(int argc, char *argv[]) {
 
     // export model to json
     // TODO
+    writeP3db(&model, opts.outpath);
     // exportModelToJson(&model);
 
     clock_t end = clock();

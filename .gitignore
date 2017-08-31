@@ -7,3 +7,4 @@ objects.out
 nodes.out
 geom.obj
 g3dbreference.h
+*.p3db
