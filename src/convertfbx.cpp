@@ -857,15 +857,46 @@ static void convertChildrenRecursive(const IScene *scene, const Object *obj, Mod
         if (child->isNode()) {
             nodeList->emplace_back();
             Node *node = &nodeList->back();
+            node->source = child;
             convertNode(scene, child, node, model, opts);
             convertChildrenRecursive(scene, child, model, &node->children, opts);
         }
     }
+}
 
+void collectNodesRecursive(std::vector<Node> &storage, std::vector<Node *> &nodes) {
+    for (int c = 0, n = storage.size(); c < n; c++) {
+        Node *node = &storage[c];
+        nodes.push_back(node);
+        collectNodesRecursive(node->children, nodes);
+    }
 }
 
 bool convertFbxToModel(const IScene *scene, Model *model, Options *opts) {
     const Object *root = scene->getRoot();
     convertChildrenRecursive(scene, root, model, &model->nodes, opts);
+
+    std::vector<Node *> nodes;
+    collectNodesRecursive(model->nodes, nodes);
+
+    int nAnimation = scene->getAnimationStackCount();
+    for (int c = 0; c < nAnimation; c++) {
+        const AnimationStack *stack = scene->getAnimationStack(c);
+        const AnimationLayer *layer;
+        for (int c = 0; (layer = stack->getLayer(c)); c++) {
+            std::string id;
+            findName(layer, "AnimationLayer", id);
+            printf("Animation Layer: %s (%lld)\n", id.c_str(), layer->id);
+            for (Node *node : nodes) {
+                const AnimationCurveNode *translation = layer->getCurveNode(*node->source, "Lcl Translation");
+                const AnimationCurveNode *rotation = layer->getCurveNode(*node->source, "Lcl Rotation");
+                const AnimationCurveNode *scale = layer->getCurveNode(*node->source, "Lcl Scaling");
+                if (translation) printf("Translation: %s\n", node->id.c_str());
+                if (rotation) printf("Rotation: %s\n", node->id.c_str());
+                if (scale) printf("Scale: %s\n", node->id.c_str());
+            }
+        }
+    }
+
     return true;
 }

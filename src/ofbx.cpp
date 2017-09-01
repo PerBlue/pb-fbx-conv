@@ -959,7 +959,7 @@ struct AnimationStackImpl : AnimationStack
 
 	const AnimationLayer* getLayer(int index) const override
 	{
-		assert(index == 0);
+		assert(index >= 0);
 		return resolveObjectLink<AnimationLayer>(index);
 	}
 
@@ -1066,6 +1066,7 @@ struct Scene : IScene
 
 	int getAnimationStackCount() const override { return (int)m_animation_stacks.size(); }
 	int getMeshCount() const override { return (int)m_meshes.size(); }
+	int getTakeInfoCount() const override { return (int)m_take_infos.size(); }
 
 
 	const Object* const* getAllObjects() const override { return m_all_objects.empty() ? nullptr : &m_all_objects[0]; }
@@ -1097,6 +1098,13 @@ struct Scene : IScene
 			if (info.name == name) return &info;
 		}
 		return nullptr;
+	}
+
+	const TakeInfo *getTakeInfo(int index) const override
+	{
+		assert(index >= 0);
+		assert(index < m_take_infos.size());
+		return &m_take_infos[index];
 	}
 
 

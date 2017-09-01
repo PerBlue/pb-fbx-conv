@@ -10,6 +10,10 @@
 #include <cassert>
 #include "types.h"
 
+namespace ofbx {
+    struct Object;
+}
+
 #define ATTR_POSITION       (1<<0)
 #define ATTR_NORMAL         (1<<1)
 #define ATTR_COLOR          (1<<2)
@@ -122,6 +126,7 @@ struct NodePart {
 };
 
 struct Node {
+    const ofbx::Object *source;
     std::string id;
     std::vector<NodePart> parts;
     std::vector<Node> children;
