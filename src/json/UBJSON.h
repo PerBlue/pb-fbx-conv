@@ -20,6 +20,8 @@
 #ifndef JSON_UBJSON_H
 #define JSON_UBJSON_H
 
+#include <cstring>
+
 namespace json {
 
 #define UBJSON_TYPE_NULL		'Z'

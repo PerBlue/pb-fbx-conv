@@ -5,6 +5,9 @@
 #include <cmath>
 #include <sstream>
 #include <cstring>
+#include <strings.h>
+#include <cstdio>
+#include <cstdlib>
 #include "convertfbx.h"
 #include "dumpfbx.h"
 #include "mathutil.h"
@@ -280,7 +283,11 @@ static void convertMaterial(const Material *mat, ModelMaterial *out) {
         ModelTexture tex;
         findName(diffuseTex, "Texture", tex.id);
         diffuseTex->getFileName().toString(buffer);
-        tex.texturePath = &buffer[0];
+		char *lastSlash = strrchr(buffer, '/');
+		char *lastBackslash = strrchr(buffer, '\\');
+		char *pathEnd = lastSlash > lastBackslash ? lastSlash : lastBackslash;
+		if (pathEnd == nullptr) pathEnd = &buffer[0];
+        tex.texturePath = pathEnd+1;
         tex.usage = USAGE_DIFFUSE;
         out->textures.push_back(std::move(tex));
     }

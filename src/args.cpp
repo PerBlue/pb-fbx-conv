@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include "args.h"
 
 static void printHelp(const char *programName) {

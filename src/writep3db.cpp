@@ -12,6 +12,7 @@
 #pragma clang diagnostic ignored "-Wextra"
 #include "json/BaseJSONWriter.h"
 #include "json/JSONWriter.h"
+#include "json/UBJSONWriter.h"
 #pragma clang diagnostic pop
 #pragma warning(pop)
 

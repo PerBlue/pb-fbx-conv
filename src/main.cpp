@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
+#include <ctime>
 #include "ofbx.h"
 #include "types.h"
 #include "model.h"

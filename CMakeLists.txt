@@ -3,12 +3,13 @@ project(pb-fbx-conv)
 
 message("Source " "${CMAKE_SOURCE_DIR}")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 set(INCLUDE "${CMAKE_SOURCE_DIR}/include")
 
 if (WIN32)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++11") # some string functions aren't defined by cygwin without this.
     add_definitions(-DWINDOWS -DPERF) # perf doesn't work anywhere other than windows yet
 elseif(APPLE)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
     add_definitions(-DAPPLE)
 endif()
 add_definitions(-DOFBX_DEFINE_MAKE_UNIQUE)
