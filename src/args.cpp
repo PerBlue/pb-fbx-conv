@@ -205,6 +205,11 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
             strncpy(opts->outpath, opts->filepath, pos);
             strncpy(opts->outpath + pos, ".p3db", 6);
         }
+
+        if (opts->maxBlendWeights == 0 || opts->maxDrawBones == 0) {
+            opts->maxBlendWeights = 0;
+            opts->maxDrawBones = 0;
+        }
     }
 
     return success;

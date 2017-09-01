@@ -22,11 +22,11 @@ static void dumpMatrix(Matrix mat) {
     }
 }
 
-static ModelMesh *findOrCreateMesh(Model *model, Attributes attributes, u32 vertexCount) {
+static ModelMesh *findOrCreateMesh(Model *model, Attributes attributes, u32 vertexCount, int maxVertices) {
     // try to find an existing mesh with the same attributes that has room for the vertices
     for (ModelMesh &mesh : model->meshes) {
         if (mesh.attributes == attributes &&
-            mesh.vertices.size() / mesh.vertexSize + vertexCount < 65536) {
+            mesh.vertices.size() / mesh.vertexSize + vertexCount < maxVertices) {
             return &mesh;
         }
     }
@@ -98,7 +98,7 @@ static int getFloats(float *buf, int num, const IElementProperty *prop) {
 }
 
 struct PreMeshPart {
-    int nodes[MAX_BLEND_WEIGHTS];
+    int nodes[MAX_DRAW_BONES];
     int material;
     PreMeshPart(int material) : material(material) {
         memset(nodes, -1, sizeof(nodes));
@@ -123,6 +123,7 @@ struct MeshData {
     const int *materials;
     const Skin *skin;
     int nBlendWeights = 0;
+    int nDrawBones = 0;
     BlendWeight *blendWeights = nullptr;
     int *trisToParts = nullptr;
     std::vector<PreMeshPart> parts;
@@ -429,7 +430,7 @@ static int polyCompare(const void *a, const void *b) {
     return result < 0 ? -1 : 1;
 }
 
-static int findOrCreateMeshPart(std::vector<PreMeshPart> &parts, int material, BlendWeight *weights, int nVertWeights) {
+static int findOrCreateMeshPart(std::vector<PreMeshPart> &parts, int material, BlendWeight *weights, int nVertWeights, int nDrawBones) {
     // build a list of the required nodes for this poly
     const int nPolyNodes = MAX_BLEND_WEIGHTS * 3;
     PolyBlendWeight polyNodes[nPolyNodes];
@@ -450,11 +451,11 @@ static int findOrCreateMeshPart(std::vector<PreMeshPart> &parts, int material, B
     int maxIdx = 0;
     while (maxIdx < nPolyNodes && polyNodes[maxIdx].index >= 0) maxIdx++;
 
-    // If we have more bones in this poly than nVertWeights, we need to cull some.
-    if (maxIdx > nVertWeights) {
+    // If we have more bones in this poly than nDrawBones, we need to cull some.
+    if (maxIdx > nDrawBones) {
         qsort(polyNodes, maxIdx, sizeof(PolyBlendWeight), polyCompare);
         // zero any weights we've removed
-        for (int c = nVertWeights; c < maxIdx; c++) {
+        for (int c = nDrawBones; c < maxIdx; c++) {
             PolyBlendWeight &pw = polyNodes[c];
             for (int w = 0; w < totalPolyWeights; w++) {
                 BlendWeight &vw = weights[w];
@@ -469,20 +470,20 @@ static int findOrCreateMeshPart(std::vector<PreMeshPart> &parts, int material, B
         normalizeBlendWeights(weights + 1*nVertWeights, nVertWeights);
         normalizeBlendWeights(weights + 2*nVertWeights, nVertWeights);
 
-        maxIdx = nVertWeights;
+        maxIdx = nDrawBones;
     }
 
     // Find an existing mesh part that can accept this set of weights and material
     for (PreMeshPart &part : parts) {
         if (part.material == material) {
-            int combinedNodes[MAX_BLEND_WEIGHTS];
+            int combinedNodes[MAX_DRAW_BONES];
             memcpy(combinedNodes, part.nodes, sizeof(combinedNodes));
 
             for (int c = 0; c < maxIdx; c++) {
                 PolyBlendWeight &p = polyNodes[c];
                 int i = 0;
-                while (i < nVertWeights && combinedNodes[i] >= 0 && combinedNodes[i] != p.index) i++;
-                if (i >= nVertWeights) goto nextPart;
+                while (i < nDrawBones && combinedNodes[i] >= 0 && combinedNodes[i] != p.index) i++;
+                if (i >= nDrawBones) goto nextPart;
                 combinedNodes[i] = p.index;
             }
 
@@ -503,11 +504,10 @@ static int findOrCreateMeshPart(std::vector<PreMeshPart> &parts, int material, B
     return int(part - &parts[0]);
 }
 
-static int *assignTrisToPartsFromSkin(const int *materials, BlendWeight *weights, int nVertWeights, int nVerts,
-                                      std::vector<PreMeshPart> &parts) {
+static int *assignTrisToPartsFromSkin(MeshData *data) {
     // TODO: This is a really nasty optimization problem that I'm going to ignore for now.
     // The problem is as follows:
-    // We have a bunch of polygons; each polygon has a set of up to nVertWeights bones on which it depends.
+    // We have a bunch of polygons; each polygon has a set of up to nDrawBones bones on which it depends.
     // We'd like to make a bunch of mesh parts. Each part has nVertWeight bones which it has available.
     // Find the minimum set of mesh parts such that the bones for any polygon are a subset of one of the parts.
 
@@ -516,6 +516,12 @@ static int *assignTrisToPartsFromSkin(const int *materials, BlendWeight *weights
     //   Look through all existing mesh parts for one in which the size of the union of the mesh part's bones and the polygon's bones is less than nVertWeights
     //   If there is such a mesh part, add any missing bones to it and assign the polygon to that part.
     //   Otherwise, make a new mesh part, set its bones to the polygon's bones, and assign the polygon to that part.
+
+    int nVerts = data->nVerts;
+    int nVertWeights = data->nBlendWeights;
+    int nDrawBones = data->nDrawBones;
+    BlendWeight *weights = data->blendWeights;
+    const int *materials = data->materials;
 
     int nTris = nVerts / 3;
     int *trisToParts = new int[nTris];
@@ -526,14 +532,14 @@ static int *assignTrisToPartsFromSkin(const int *materials, BlendWeight *weights
             material = findMaterialForTri(materials);
         }
 
-        trisToParts[c] = findOrCreateMeshPart(parts, material, weights, nVertWeights);
+        trisToParts[c] = findOrCreateMeshPart(data->parts, material, weights, nVertWeights, nDrawBones);
 
         // move forward one vertex
         weights += nVertWeights * 3;
         if (materials) materials += 3;
     }
 
-    printf("Packed %d triangles into %d mesh parts.\n", nTris, int(parts.size()));
+    printf("Packed %d triangles into %d mesh parts not exceeding %d bones.\n", nTris, int(data->parts.size()), nDrawBones);
     return trisToParts;
 }
 
@@ -542,7 +548,7 @@ static void addBones(MeshData *data, PreMeshPart *part, NodePart *np, const Matr
     const Skin *skin = data->skin;
     if (!skin) return;
 
-    int maxBones = data->nBlendWeights;
+    int maxBones = data->nDrawBones;
     int nBonesUsed = 0;
     while (nBonesUsed < maxBones && part->nodes[nBonesUsed] >= 0) nBonesUsed++;
 
@@ -556,14 +562,28 @@ static void addBones(MeshData *data, PreMeshPart *part, NodePart *np, const Matr
         findName(link, "Node", bone->nodeID);
 
         // calculate the inverse bind pose
+        if (nBonesUsed == 1) printf("Geometry Transform\n");
+        if (nBonesUsed == 1) dumpMatrix(*geometryMatrix);
         Matrix clusterTransform = cluster->getTransformMatrix();
+        if (nBonesUsed == 1) printf("Cluster Transform\n");
+        if (nBonesUsed == 1) dumpMatrix(clusterTransform);
         Matrix clusterLinkTransform = cluster->getTransformLinkMatrix();
+        if (nBonesUsed == 1) printf("Cluster Link Transform\n");
+        if (nBonesUsed == 1) dumpMatrix(clusterLinkTransform);
         Matrix clusterGeom = mul(&clusterTransform, geometryMatrix);
+        if (nBonesUsed == 1) printf("Cluster Transform * Geometry Transform\n");
+        if (nBonesUsed == 1) dumpMatrix(clusterGeom);
         Matrix invLinkTransform;
         invertMatrix(&clusterLinkTransform, &invLinkTransform);
+        if (nBonesUsed == 1) printf("inv(Cluster Link Transform)\n");
+        if (nBonesUsed == 1) dumpMatrix(invLinkTransform);
         Matrix bindPose = mul(&invLinkTransform, &clusterGeom);
+        if (nBonesUsed == 1) printf("Bind Pose\n");
+        if (nBonesUsed == 1) dumpMatrix(bindPose);
         Matrix invBindPose;
         invertMatrix(&bindPose, &invBindPose);
+        if (nBonesUsed == 1) printf("inv(Bind Pose)\n");
+        if (nBonesUsed == 1) dumpMatrix(invBindPose);
         extractTransform(&invBindPose, bone->translation, bone->rotation, bone->scale);
     }
 }
@@ -590,7 +610,7 @@ static inline void fetch(float *&pos, const Vec4 &vec) {
     pos += 4;
 }
 
-static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
+static void fetchVertex(MeshData *data, int vertexIndex, float *vertex, PreMeshPart *part) {
     int attrs = data->attrs;
     float *pos = vertex;
     if (attrs & ATTR_POSITION) {
@@ -604,7 +624,16 @@ static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
     if (attrs & ATTR_COLOR) {
         fetch(pos, data->colors[vertexIndex]);
     }
-    // TODO: Packed color
+
+    if (attrs & ATTR_COLORPACKED) {
+        Vec4 color = data->colors[vertexIndex];
+        u8 r = u8(color.x >= 1.0 ? 255 : color.x * 256.0);
+        u8 g = u8(color.y >= 1.0 ? 255 : color.y * 256.0);
+        u8 b = u8(color.z >= 1.0 ? 255 : color.z * 256.0);
+        u8 a = u8(color.w >= 1.0 ? 255 : color.w * 256.0);
+        u32 packed = u32(a)<<24 | u32(b)<<16 | u32(g)<<8 | u32(r);
+        *pos++ = *(float *)&packed;
+    }
 
     if (attrs & ATTR_TANGENT) {
         fetch(pos, data->tangents[vertexIndex]);
@@ -613,10 +642,18 @@ static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
 
     // For now we only support one tex coord.
     if (attrs & ATTR_TEXCOORD0) {
-        fetch(pos, data->texCoords[vertexIndex]);
+        Vec2 tc = data->texCoords[vertexIndex];
+        pos[0] = float(tc.x);
+        if (data->opts->flipV) {
+            pos[1] = float(1.0 - tc.y);
+        } else {
+            pos[1] = float(tc.y);
+        }
+        pos += 2;
     }
 
     int nVertWeights = data->nBlendWeights;
+    int nDrawBones = data->nDrawBones;
     BlendWeight *weights = data->blendWeights + vertexIndex * nVertWeights;
     for (int c = 0; c < nVertWeights; c++) {
         BlendWeight weight = weights[c];
@@ -624,8 +661,17 @@ static void fetchVertex(MeshData *data, int vertexIndex, float *vertex) {
             pos[0] = 0;
             pos[1] = 0;
         } else {
-            pos[0] = (float) weight.index; // TODO: Should this be a reinterpret cast?
-            pos[1] = weight.weight;
+            int idx = weight.index;
+            int c = 0;
+            while (c < nDrawBones && part->nodes[c] != idx) c++;
+            if (c >= nDrawBones) {
+                assert(false);
+                pos[0] = 0;
+                pos[1] = 0;
+            } else {
+                pos[0] = (float) c;
+                pos[1] = weight.weight;
+            }
         }
         pos += 2;
     }
@@ -656,7 +702,7 @@ static u16 addVertex(ModelMesh *mesh, float *vertex) {
     return u16(index);
 }
 
-static void buildMesh(MeshData *data, ModelMesh *mesh, std::vector<u16> *indices, int partID) {
+static void buildMesh(MeshData *data, ModelMesh *mesh, std::vector<u16> *indices, int partID, PreMeshPart *part) {
     float vertex[MAX_VERTEX_SIZE];
     int nTris = data->nVerts / 3;
     int *trisToParts = data->trisToParts;
@@ -666,15 +712,15 @@ static void buildMesh(MeshData *data, ModelMesh *mesh, std::vector<u16> *indices
 
         u16 index;
 
-        fetchVertex(data, v+0, vertex);
+        fetchVertex(data, v+0, vertex, part);
         index = addVertex(mesh, vertex);
         indices->push_back(index);
 
-        fetchVertex(data, v+1, vertex);
+        fetchVertex(data, v+1, vertex, part);
         index = addVertex(mesh, vertex);
         indices->push_back(index);
 
-        fetchVertex(data, v+2, vertex);
+        fetchVertex(data, v+2, vertex, part);
         index = addVertex(mesh, vertex);
         indices->push_back(index);
     }
@@ -710,11 +756,15 @@ static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, M
     data.attrs = 0;
     if (data.positions) data.attrs |= ATTR_POSITION;
     if (data.normals)   data.attrs |= ATTR_NORMAL;
-    if (data.colors)    data.attrs |= ATTR_COLOR; // TODO: Pack colors
+    if (data.colors) {
+        if (opts->packVertexColors) data.attrs |= ATTR_COLORPACKED;
+        else                        data.attrs |= ATTR_COLOR;
+    }
     if (data.tangents)  data.attrs |= ATTR_TANGENT;
     if (data.texCoords) data.attrs |= ATTR_TEXCOORD0;
     if (data.skin) {
         data.nBlendWeights = computeBlendWeightCount(data.skin, data.nVerts, opts->maxBlendWeights);
+        data.nDrawBones = opts->maxDrawBones;
         if (data.nBlendWeights > MAX_BLEND_WEIGHTS) data.nBlendWeights = MAX_BLEND_WEIGHTS;
         if (data.nBlendWeights > 0) {
             for (int c = 0; c < data.nBlendWeights; c++) {
@@ -726,7 +776,7 @@ static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, M
 
     if (data.blendWeights) {
         // handles null materials
-        data.trisToParts = assignTrisToPartsFromSkin(data.materials, data.blendWeights, data.nBlendWeights, data.nVerts, data.parts);
+        data.trisToParts = assignTrisToPartsFromSkin(&data);
     } else if (data.materials) {
         data.trisToParts = assignTrisToPartsFromMaterials(data.materials, data.nVerts, data.parts);
     } else {
@@ -736,20 +786,28 @@ static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, M
 
     int nMaterials = mesh->getMaterialCount();
     size_t baseIdx = model->materials.size();
-    model->materials.reserve(baseIdx + nMaterials);
-    for (int c = 0; c < nMaterials; c++) {
-        const Material *mat = mesh->getMaterial(c);
-        if (opts->dumpMaterials) {
-            dumpElement(stdout, &mat->element, 2);
-            dumpElementRecursive(stdout, mat->element.getFirstChild(), 4);
-        }
+    if (nMaterials == 0) {
+        printf("Warning: No materials for mesh %s. Generating default material.\n", &mesh->name[0]);
         model->materials.emplace_back();
-        ModelMaterial *modelMaterial = &model->materials.back();
-        convertMaterial(mat, modelMaterial);
+        ModelMaterial *defaultMaterial = &model->materials.back();
+        defaultMaterial->id = "PerFbx_Default_Material";
+        defaultMaterial->lambertOnly = true;
+    } else {
+        model->materials.reserve(baseIdx + nMaterials);
+        for (int c = 0; c < nMaterials; c++) {
+            const Material *mat = mesh->getMaterial(c);
+            if (opts->dumpMaterials) {
+                dumpElement(stdout, &mat->element, 2);
+                dumpElementRecursive(stdout, mat->element.getFirstChild(), 4);
+            }
+            model->materials.emplace_back();
+            ModelMaterial *modelMaterial = &model->materials.back();
+            convertMaterial(mat, modelMaterial);
+        }
     }
 
 
-    ModelMesh *outMesh = findOrCreateMesh(model, data.attrs, data.nVerts);
+    ModelMesh *outMesh = findOrCreateMesh(model, data.attrs, data.nVerts, opts->maxVertices);
     std::vector<float> *verts = &outMesh->vertices;
     verts->reserve(verts->size() + data.nVerts * outMesh->vertexSize);
 
@@ -770,7 +828,7 @@ static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, M
 
         // build the vertices and indices
         mp.primitive = PRIMITIVETYPE_TRIANGLES;
-        buildMesh(&data, outMesh, &mp.indices, partID);
+        buildMesh(&data, outMesh, &mp.indices, partID, &part);
 
         // attach rendering info to the node
         node->parts.emplace_back();

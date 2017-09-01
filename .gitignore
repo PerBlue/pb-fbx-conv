@@ -9,3 +9,4 @@ geom.obj
 g3dbreference.h
 *.p3db
 *.json
+*.g3dj
