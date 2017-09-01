@@ -8,3 +8,4 @@ nodes.out
 geom.obj
 g3dbreference.h
 *.p3db
+*.json

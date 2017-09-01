@@ -10,6 +10,13 @@
 struct Options {
     char *filepath = nullptr;
     char *outpath = nullptr;
+
+    int maxVertices = 32767;
+    int maxDrawBones = 12;
+    int maxBlendWeights = 4;
+    bool flipV = false;
+    bool packVertexColors = false;
+
     bool dumpElementTree = false;
     bool dumpObjectTree = false;
     bool dumpNodeTree = false;
@@ -17,7 +24,6 @@ struct Options {
     bool dumpMeshes = false;
     bool dumpGeom = false;
     bool dumpObj = false;
-    int maxBlendWeights = MAX_BLEND_WEIGHTS;
 };
 
 bool parseArgs(int argc, char *argv[], Options *opts);

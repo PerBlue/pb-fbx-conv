@@ -5,8 +5,15 @@
 #include "writep3db.h"
 
 #include "ofbx.h"
+
+#pragma warning(push, 0)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wall"
+#pragma clang diagnostic ignored "-Wextra"
 #include "json/BaseJSONWriter.h"
 #include "json/JSONWriter.h"
+#pragma clang diagnostic pop
+#pragma warning(pop)
 
 using namespace std;
 using namespace ofbx;

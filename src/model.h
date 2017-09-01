@@ -72,6 +72,8 @@ static const char *primitiveNames[] = {
         "POINTS", "LINES", "LINE_STRIP", "TRIANGLES", "TRIANGLE_STRIP"
 };
 
+#define MAX_DRAW_BONES 32
+
 struct ModelTexture {
     std::string id;
     std::string texturePath;
