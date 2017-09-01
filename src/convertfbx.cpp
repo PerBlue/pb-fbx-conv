@@ -17,9 +17,15 @@ using namespace ofbx;
 const int bufsize = 128;
 
 static void dumpMatrix(Matrix mat) {
-    for (int n = 0; n < 4; n++) {
-        printf("%7.6f, %7.6f, %7.6f, %7.6f\n", mat.m[n+0], mat.m[n+4], mat.m[n+8], mat.m[n+12]);
-    }
+    float translation[3], rotation[4], scale[3];
+    extractTransform(&mat, translation, rotation, scale);
+    printf("t %7.6f %7.6f %7.6f\n", translation[0], translation[1], translation[2]);
+    printf("r %7.6f %7.6f %7.6f %7.6f\n", rotation[0], rotation[1], rotation[2], rotation[3]);
+    printf("s %7.6f %7.6f %7.6f\n", scale[0], scale[1], scale[2]);
+
+//    for (int n = 0; n < 4; n++) {
+//        printf("%7.6f, %7.6f, %7.6f, %7.6f\n", mat.m[n+0], mat.m[n+4], mat.m[n+8], mat.m[n+12]);
+//    }
 }
 
 static ModelMesh *findOrCreateMesh(Model *model, Attributes attributes, u32 vertexCount, int maxVertices) {
@@ -562,28 +568,13 @@ static void addBones(MeshData *data, PreMeshPart *part, NodePart *np, const Matr
         findName(link, "Node", bone->nodeID);
 
         // calculate the inverse bind pose
-        if (nBonesUsed == 1) printf("Geometry Transform\n");
-        if (nBonesUsed == 1) dumpMatrix(*geometryMatrix);
-        Matrix clusterTransform = cluster->getTransformMatrix();
-        if (nBonesUsed == 1) printf("Cluster Transform\n");
-        if (nBonesUsed == 1) dumpMatrix(clusterTransform);
+        // This is pretty much a total guess, but it produces the same results as the reference converter.
         Matrix clusterLinkTransform = cluster->getTransformLinkMatrix();
-        if (nBonesUsed == 1) printf("Cluster Link Transform\n");
-        if (nBonesUsed == 1) dumpMatrix(clusterLinkTransform);
-        Matrix clusterGeom = mul(&clusterTransform, geometryMatrix);
-        if (nBonesUsed == 1) printf("Cluster Transform * Geometry Transform\n");
-        if (nBonesUsed == 1) dumpMatrix(clusterGeom);
         Matrix invLinkTransform;
         invertMatrix(&clusterLinkTransform, &invLinkTransform);
-        if (nBonesUsed == 1) printf("inv(Cluster Link Transform)\n");
-        if (nBonesUsed == 1) dumpMatrix(invLinkTransform);
-        Matrix bindPose = mul(&invLinkTransform, &clusterGeom);
-        if (nBonesUsed == 1) printf("Bind Pose\n");
-        if (nBonesUsed == 1) dumpMatrix(bindPose);
+        Matrix bindPose = mul(&invLinkTransform, geometryMatrix);
         Matrix invBindPose;
         invertMatrix(&bindPose, &invBindPose);
-        if (nBonesUsed == 1) printf("inv(Bind Pose)\n");
-        if (nBonesUsed == 1) dumpMatrix(invBindPose);
         extractTransform(&invBindPose, bone->translation, bone->rotation, bone->scale);
     }
 }

@@ -62,25 +62,46 @@ static void extractTransform(const ofbx::Matrix *mat, float *translation, float 
     double isz = 1.0 / sz;
 
     double rxx = m[0] * isx;
-    double ryx = m[1] * isx;
-    double rzx = m[2] * isx;
-    double rxy = m[4] * isy;
+    double rxy = m[1] * isx;
+    double rxz = m[2] * isx;
+    double ryx = m[4] * isy;
     double ryy = m[5] * isy;
-    double rzy = m[6] * isy;
-    double rxz = m[8] * isz;
-    double ryz = m[9] * isz;
+    double ryz = m[6] * isy;
+    double rzx = m[8] * isz;
+    double rzy = m[9] * isz;
     double rzz = m[10] * isz;
 
-    double qw = sqrt(1.0 + rxx + ryy + rzz) / 2;
-    double iw4 = 1.0 / (qw * 4);
-    double qx = (rzy - ryz) * iw4;
-    double qy = (rxz - rzx) * iw4;
-    double qz = (ryx - rxy) * iw4;
+    // Thanks to Mike Day @ Insomniac Games for this quaternion conversion routine.
+    // https://d3cw3dd2w32x2b.cloudfront.net/wp-content/uploads/2015/01/matrix-to-quat.pdf
+    double t, qx, qy, qz, qw;
 
-    rotation[0] = (float) qx;
-    rotation[1] = (float) qy;
-    rotation[2] = (float) qz;
-    rotation[3] = (float) qw;
+    if (rzz < 0) { // is |(x,y)| bigger than |(z,w)|?
+        if (rxx > ryy) { // is |x| bigger than |y|?
+            // use x-form
+            t = 1 + rxx - ryy - rzz;
+            qx = t; qy = rxy+ryx; qz = rzx+rxz; qw = ryz-rzy;
+        } else {
+            // use y-form
+            t = 1 - rxx + ryy - rzz;
+            qx = rxy+ryx; qy = t; qz = ryz+rzy; qw = rzx-rxz;
+        }
+    } else {
+        if (rxx < -ryy) { // is |z| bigger than |w|?
+            // use z-form
+            t = 1 - rxx - ryy + rzz;
+            qx = rzx+rxz; qy = ryz+rzy; qz = t; qw = rxy-ryx;
+        } else {
+            // use w-form
+            t = 1 + rxx + ryy + rzz;
+            qx = ryz-rzy; qy = rzx-rxz; qz = rxy-ryx; qw = t;
+        }
+    }
+
+    double qn = 0.5 / sqrt(t);
+    rotation[0] = (float) (qx * qn);
+    rotation[1] = (float) (qy * qn);
+    rotation[2] = (float) (qz * qn);
+    rotation[3] = (float) (qw * qn);
 }
 
 static bool invertMatrix(const ofbx::Matrix *mat, ofbx::Matrix *out)
