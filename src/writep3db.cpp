@@ -176,7 +176,7 @@ static void writeG3dAnimation(Animation *anim, BaseJSONWriter &writer) {
         int soff = anim->nodeFormats[3*c + 2];
         for (int d = 0; d < nFrames; d++) {
             writer.obj();
-            writer << "keytime" = (d * anim->samplingRate);
+            writer << "keytime" = (d * anim->samplingRate * 1000);
             if (toff >= 0) writer.val("translation").data(&frameData[toff], 3);
             if (roff >= 0) writer.val("rotation").data(&frameData[roff], 4);
             if (soff >= 0) writer.val("scale").data(&frameData[soff], 3);
