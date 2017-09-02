@@ -13,6 +13,8 @@
 #include "json/BaseJSONWriter.h"
 #include "json/JSONWriter.h"
 #include "json/UBJSONWriter.h"
+#include "args.h"
+
 #pragma clang diagnostic pop
 #pragma warning(pop)
 
@@ -156,6 +158,39 @@ static void writeNodeRecursive(Node *node, BaseJSONWriter &writer) {
     writer.end();
 }
 
+static void writeG3dAnimation(Animation *anim, BaseJSONWriter &writer) {
+    writer.obj(2);
+    writer << "id" = anim->id;
+    u32 nNodes = anim->nodeIDs.size();
+    u32 nFrames = anim->frames;
+    writer.val("bones").arr(nNodes);
+    for (int c = 0; c < nNodes; c++) {
+        writer.obj(2);
+        writer << "boneId" = anim->nodeIDs[c];
+        writer.val("keyframes").arr(nFrames);
+
+        int frameSize = anim->stride;
+        float *frameData = anim->nodeData.data();
+        int toff = anim->nodeFormats[3*c + 0];
+        int roff = anim->nodeFormats[3*c + 1];
+        int soff = anim->nodeFormats[3*c + 2];
+        for (int d = 0; d < nFrames; d++) {
+            writer.obj();
+            writer << "keytime" = (d * anim->samplingRate);
+            if (toff >= 0) writer.val("translation").data(&frameData[toff], 3);
+            if (roff >= 0) writer.val("rotation").data(&frameData[roff], 4);
+            if (soff >= 0) writer.val("scale").data(&frameData[soff], 3);
+            writer.end();
+            frameData += frameSize;
+        }
+
+        writer.end(); // keyframes[]
+        writer.end(); // {}
+    }
+    writer.end(); // bones[]
+    writer.end(); // {}
+}
+
 static void writeModel(Model *model, BaseJSONWriter &writer) {
     writer.obj(6);
     short version[2] = {0, 1};
@@ -180,8 +215,10 @@ static void writeModel(Model *model, BaseJSONWriter &writer) {
     }
     writer.end();
 
-    writer.val("animations").arr(0);
-    // TODO
+    writer.val("animations").arr(model->animations.size());
+    for (Animation &anim : model->animations) {
+        writeG3dAnimation(&anim, writer);
+    }
     writer.end();
 
     writer.end();

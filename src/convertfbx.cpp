@@ -867,7 +867,7 @@ static void convertChildrenRecursive(const IScene *scene, const Object *obj, Mod
     }
 }
 
-void collectNodesRecursive(std::vector<Node> &storage, std::vector<Node *> &nodes) {
+static void collectNodesRecursive(std::vector<Node> &storage, std::vector<Node *> &nodes) {
     for (int c = 0, n = storage.size(); c < n; c++) {
         Node *node = &storage[c];
         nodes.push_back(node);
@@ -875,31 +875,203 @@ void collectNodesRecursive(std::vector<Node> &storage, std::vector<Node *> &node
     }
 }
 
-bool convertFbxToModel(const IScene *scene, Model *model, Options *opts) {
-    const Object *root = scene->getRoot();
-    convertChildrenRecursive(scene, root, model, &model->nodes, opts);
+static bool close(float *a, float *b, int len, float epsilon) {
+    for (int c = 0; c < len; c++) {
+        if (fabsf(a[c] - b[c]) >= epsilon) return false;
+    }
+    return true;
+}
 
+struct AnimatedNode {
+    Node *modelNode;
+    const AnimationCurveNode *translation;
+    const AnimationCurveNode *rotation;
+    const AnimationCurveNode *scale;
+    s32 toff = -1;
+    s32 roff = -1;
+    s32 soff = -1;
+    std::vector<float> data;
+    s32 width;
+    float *tdata = nullptr;
+    float *rdata = nullptr;
+    float *sdata = nullptr;
+    bool needsT = false;
+    bool needsR = false;
+    bool needsS = false;
+};
+
+static void convertAnimations(const IScene *scene, Model *model, Options *opts) {
     std::vector<Node *> nodes;
     collectNodesRecursive(model->nodes, nodes);
 
     int nAnimation = scene->getAnimationStackCount();
     for (int c = 0; c < nAnimation; c++) {
         const AnimationStack *stack = scene->getAnimationStack(c);
-        const AnimationLayer *layer;
-        for (int c = 0; (layer = stack->getLayer(c)); c++) {
-            std::string id;
-            findName(layer, "AnimationLayer", id);
-            printf("Animation Layer: %s (%lld)\n", id.c_str(), layer->id);
-            for (Node *node : nodes) {
-                const AnimationCurveNode *translation = layer->getCurveNode(*node->source, "Lcl Translation");
-                const AnimationCurveNode *rotation = layer->getCurveNode(*node->source, "Lcl Rotation");
-                const AnimationCurveNode *scale = layer->getCurveNode(*node->source, "Lcl Scaling");
-                if (translation) printf("Translation: %s\n", node->id.c_str());
-                if (rotation) printf("Rotation: %s\n", node->id.c_str());
-                if (scale) printf("Scale: %s\n", node->id.c_str());
+        const TakeInfo *take = scene->getTakeInfo(stack->name);
+        if (take == nullptr) {
+            printf("Warning: Take info not found for animation %s\n", stack->name);
+            continue;
+        }
+        double startTime = take->local_time_from;
+        double timespan = take->local_time_to - startTime;
+        if (timespan < 0) {
+            printf("Warning: Ignoring negative timespan for animation %s\n", stack->name);
+            continue;
+        }
+        int numKeyframes = (int) ceil(timespan / opts->animSamplingRate);
+        if (numKeyframes == 0) {
+            printf("Warning: Ignoring animation with no keyframes: %s\n", stack->name);
+            continue;
+        }
+        printf("Take %s for (%f, %f), sampling %d keyframes.\n", stack->name, take->local_time_from, take->local_time_to, numKeyframes);
+
+        std::vector<AnimatedNode> animatedNodes;
+        animatedNodes.reserve(nodes.size());
+
+        model->animations.emplace_back();
+        Animation *anim = &model->animations.back();
+        anim->id = &stack->name[0];
+        anim->frames = numKeyframes;
+        anim->samplingRate = opts->animSamplingRate;
+
+        // First set up a buffer for each node that's animated
+        const AnimationLayer *layer = stack->getLayer(0);
+        for (Node *node : nodes) {
+            const AnimationCurveNode *translation = layer->getCurveNode(*node->source, "Lcl Translation");
+            const AnimationCurveNode *rotation = layer->getCurveNode(*node->source, "Lcl Rotation");
+            const AnimationCurveNode *scale = layer->getCurveNode(*node->source, "Lcl Scaling");
+            if (translation || rotation || scale) {
+                animatedNodes.emplace_back();
+                AnimatedNode &an = animatedNodes.back();
+                an.modelNode = node;
+                an.translation = translation;
+                an.rotation = rotation;
+                an.scale = scale;
+                u32 size = 0;
+                if (translation) size += 3;
+                if (rotation) size += 4;
+                if (scale) size += 3;
+                an.width = size;
+                an.data.resize(size * numKeyframes);
+                float *data = an.data.data();
+                if (translation) {
+                    an.tdata = data;
+                    data += 3;
+                }
+                if (rotation) {
+                    an.rdata = data;
+                    data += 4;
+                }
+                if (scale) {
+                    an.sdata = data;
+                }
+            }
+        }
+        if (animatedNodes.size() == 0) {
+            printf("Warning: Ignoring animation with no keyframes: %s\n", anim->id.c_str());
+            model->animations.pop_back();
+            continue;
+        }
+
+        // Second, calculate all of the transforms for each keyframe and figure out which channels are necessary
+        for (int frame = 0; frame < numKeyframes; frame++) {
+            double frameTime = startTime + (frame * timespan) / (numKeyframes - 1);
+            for (AnimatedNode &an : animatedNodes) {
+                float *tn = an.modelNode->translation;
+                float *rn = an.modelNode->rotation;
+                float *sn = an.modelNode->scale;
+                if (an.translation) {
+                    Vec3 t = an.translation->getNodeLocalTransform(frameTime);
+                    float *td = &an.tdata[an.width * frame];
+                    td[0] = (float) t.x;
+                    td[1] = (float) t.y;
+                    td[2] = (float) t.z;
+                    if (!close(tn, td, 3, opts->animError)) {
+                        an.needsT = true;
+                    }
+                }
+                if (an.rotation) {
+                    Vec3 euler = an.rotation->getNodeLocalTransform(frameTime);
+                    float *rd = &an.rdata[an.width * frame];
+                    eulerToQuaternion(euler, rd);
+                    if (!close(rn, rd, 4, opts->animError)) {
+                        an.needsR = true;
+                    }
+                }
+                if (an.scale) {
+                    Vec3 scale = an.scale->getNodeLocalTransform(frameTime);
+                    float *sd = &an.sdata[an.width * frame];
+                    sd[0] = (float) scale.x;
+                    sd[1] = (float) scale.y;
+                    sd[2] = (float) scale.z;
+                    if (!close(sn, sd, 3, opts->animError)) {
+                        an.needsS = true;
+                    }
+                }
+            }
+        }
+
+        // anim->nodeIDs.push_back(node->id);
+        // Next up, assign offsets to all of the channels for the packed format and strip untransformed nodes.
+        int offset = 0;
+        for (AnimatedNode &an : animatedNodes) {
+            if (an.needsT | an.needsR | an.needsS) {
+                anim->nodeIDs.push_back(an.modelNode->id);
+                if (an.needsT) {
+                    an.toff = offset;
+                    offset += 3;
+                }
+                if (an.needsR) {
+                    an.roff = offset;
+                    offset += 4;
+                }
+                if (an.needsS) {
+                    an.soff = offset;
+                    offset += 3;
+                }
+                anim->nodeFormats.push_back(an.toff);
+                anim->nodeFormats.push_back(an.roff);
+                anim->nodeFormats.push_back(an.soff);
+            }
+        }
+        anim->stride = offset;
+
+        int frameSize = offset;
+        u32 totalSize = frameSize * numKeyframes;
+        anim->nodeData.resize(totalSize);
+        float *nodeData = anim->nodeData.data();
+        for (AnimatedNode &an : animatedNodes) {
+            if (an.needsT | an.needsR | an.needsS) {
+                float *frame = nodeData;
+                float *t = an.tdata;
+                float *r = an.rdata;
+                float *s = an.sdata;
+                int w = an.width;
+                for (int c = 0; c < numKeyframes; c++) {
+                    if (an.needsT) {
+                        memcpy(&frame[an.toff], t, 3*sizeof(float));
+                        t += w;
+                    }
+                    if (an.needsR) {
+                        memcpy(&frame[an.roff], r, 4*sizeof(float));
+                        r += w;
+                    }
+                    if (an.needsS) {
+                        memcpy(&frame[an.soff], s, 3*sizeof(float));
+                        s += w;
+                    }
+                    frame += frameSize;
+                }
             }
         }
     }
+}
+
+bool convertFbxToModel(const IScene *scene, Model *model, Options *opts) {
+    const Object *root = scene->getRoot();
+    convertChildrenRecursive(scene, root, model, &model->nodes, opts);
+
+    convertAnimations(scene, model, opts);
 
     return true;
 }

@@ -139,8 +139,9 @@ struct Animation {
     std::string id;
     u32 stride;
     u32 frames;
+    f32 samplingRate;
     std::vector<std::string> nodeIDs;
-    std::vector<u32> nodeFormats;
+    std::vector<s32> nodeFormats;
     std::vector<f32> nodeData;
 };
 

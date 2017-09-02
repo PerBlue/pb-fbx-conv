@@ -267,4 +267,66 @@ static void normalize(ofbx::Vec3 *vec) {
     }
 }
 
+static ofbx::Matrix makeIdentity()
+{
+    return {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+}
+
+static ofbx::Matrix rotationX(double angle)
+{
+    ofbx::Matrix m = makeIdentity();
+    double c = cos(angle);
+    double s = sin(angle);
+
+    m.m[5] = m.m[10] = c;
+    m.m[9] = -s;
+    m.m[6] = s;
+
+    return m;
+}
+
+static ofbx::Matrix rotationY(double angle)
+{
+    ofbx::Matrix m = makeIdentity();
+    double c = cos(angle);
+    double s = sin(angle);
+
+    m.m[0] = m.m[10] = c;
+    m.m[8] = s;
+    m.m[2] = -s;
+
+    return m;
+}
+
+static ofbx::Matrix rotationZ(double angle)
+{
+    ofbx::Matrix m = makeIdentity();
+    double c = cos(angle);
+    double s = sin(angle);
+
+    m.m[0] = m.m[5] = c;
+    m.m[4] = -s;
+    m.m[1] = s;
+
+    return m;
+}
+
+static ofbx::Matrix getRotationMatrix(const ofbx::Vec3& euler)
+{
+    const double TO_RAD = 3.1415926535897932384626433832795028 / 180.0;
+    ofbx::Matrix rx = rotationX(euler.x * TO_RAD);
+    ofbx::Matrix ry = rotationY(euler.y * TO_RAD);
+    ofbx::Matrix rz = rotationZ(euler.z * TO_RAD);
+    ofbx::Matrix zy = mul(&rz, &ry);
+    return mul(&zy, &rx);
+}
+
+static void eulerToQuaternion(const ofbx::Vec3 &euler, float *quat) {
+    // this is dumb.
+    ofbx::Matrix rotation = getRotationMatrix(euler);
+    float translation[3];
+    float scale[3];
+    extractTransform(&rotation, translation, quat, scale);
+}
+
 #endif //PB_FBX_CONV_MATHUTIL_H
