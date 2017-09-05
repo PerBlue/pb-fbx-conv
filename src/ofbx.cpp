@@ -2196,6 +2196,44 @@ Matrix Object::evalLocal(const Vec3& translation, const Vec3& rotation) const
 	return t * r_off * r_p * r_pre * r * r_post_inv * r_p_inv * s_off * s_p * s * s_p_inv;
 }
 
+Matrix Object::evalLocal(const Vec3& translation, const Vec3& rotation, const Vec3& scale) const
+{
+	Vec3 rotation_pivot = getRotationPivot();
+	Vec3 scaling_pivot = getScalingPivot();
+
+	Matrix s = makeIdentity();
+	s.m[0] = scale.x;
+	s.m[5] = scale.y;
+	s.m[10] = scale.z;
+
+	Matrix t = makeIdentity();
+	setTranslation(translation, &t);
+
+	Matrix r = getRotationMatrix(rotation);
+	Matrix r_pre = getRotationMatrix(getPreRotation());
+	Matrix r_post_inv = getRotationMatrix(getPostRotation());
+
+	Matrix r_off = makeIdentity();
+	setTranslation(getRotationOffset(), &r_off);
+
+	Matrix r_p = makeIdentity();
+	setTranslation(rotation_pivot, &r_p);
+
+	Matrix r_p_inv = makeIdentity();
+	setTranslation(-rotation_pivot, &r_p_inv);
+
+	Matrix s_off = makeIdentity();
+	setTranslation(getScalingOffset(), &s_off);
+
+	Matrix s_p = makeIdentity();
+	setTranslation(scaling_pivot, &s_p);
+
+	Matrix s_p_inv = makeIdentity();
+	setTranslation(-scaling_pivot, &s_p_inv);
+
+	// http://help.autodesk.com/view/FBX/2017/ENU/?guid=__files_GUID_10CDD63C_79C1_4F2D_BB28_AD2BE65A02ED_htm
+	return t * r_off * r_p * r_pre * r * r_post_inv * r_p_inv * s_off * s_p * s * s_p_inv;
+}
 
 Vec3 Object::getLocalTranslation() const
 {

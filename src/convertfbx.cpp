@@ -250,6 +250,18 @@ static void processMaterialNodeRecursive(const IElement *mat, MaterialLoading *o
     }
 }
 
+static void findFilename(const Texture *tex, std::string &out) {
+    char buffer[bufsize];
+    tex->getRelativeFileName().toString(buffer);
+    if (!buffer[0]) tex->getFileName().toString(buffer);
+    char *lastSlash = strrchr(buffer, '/');
+    char *lastBack = strrchr(buffer, '\\');
+    char *last = lastSlash > lastBack ? lastSlash : lastBack;
+    if (last == nullptr) last = buffer;
+    else last++;
+    out = last;
+}
+
 static void convertMaterial(const Material *mat, ModelMaterial *out) {
     char buffer[bufsize];
 
@@ -282,8 +294,7 @@ static void convertMaterial(const Material *mat, ModelMaterial *out) {
     if (diffuseTex) {
         ModelTexture tex;
         findName(diffuseTex, "Texture", tex.id);
-        diffuseTex->getRelativeFileName().toString(buffer);
-        tex.texturePath = &buffer[0];
+        findFilename(diffuseTex, tex.texturePath);
         tex.usage = USAGE_DIFFUSE;
         out->textures.push_back(std::move(tex));
     }
@@ -292,8 +303,7 @@ static void convertMaterial(const Material *mat, ModelMaterial *out) {
     if (normalTex) {
         ModelTexture tex;
         findName(normalTex, "Texture", tex.id);
-        normalTex->getFileName().toString(buffer);
-        tex.texturePath = &buffer[0];
+        findFilename(normalTex, tex.texturePath);
         tex.usage = USAGE_NORMAL;
         out->textures.push_back(std::move(tex));
     }
@@ -977,33 +987,43 @@ static void convertAnimations(const IScene *scene, Model *model, Options *opts) 
         for (int frame = 0; frame < numKeyframes; frame++) {
             double frameTime = startTime + (frame * timespan) / (numKeyframes - 1);
             for (AnimatedNode &an : animatedNodes) {
+                // Get animated t/r/s
+                Vec3 ts, rs, ss;
+                if (an.translation) ts = an.translation->getNodeLocalTransform(frameTime);
+                else ts = an.modelNode->source->getLocalTranslation();
+                if (an.rotation) rs = an.rotation->getNodeLocalTransform(frameTime);
+                else rs = an.modelNode->source->getLocalRotation();
+                if (an.scale) ss = an.scale->getNodeLocalTransform(frameTime);
+                else ss = an.modelNode->source->getLocalScaling();
+
+                // Convert to the object's local coordinate frame
+                Matrix animTransform = an.modelNode->source->evalLocal(ts, rs, ss);
+                float td[3], rd[4], sd[3];
+                extractTransform(&animTransform, td, rd, sd);
+
+                // Get bind pose t/r/s for reference
                 float *tn = an.modelNode->translation;
                 float *rn = an.modelNode->rotation;
                 float *sn = an.modelNode->scale;
+
+                // Record channel data and check for necessity
                 if (an.translation) {
-                    Vec3 t = an.translation->getNodeLocalTransform(frameTime);
-                    float *td = &an.tdata[an.width * frame];
-                    td[0] = (float) t.x;
-                    td[1] = (float) t.y;
-                    td[2] = (float) t.z;
+                    float *tr = &an.tdata[an.width * frame];
+                    memcpy(tr, td, sizeof(td));
                     if (!close(tn, td, 3, opts->animError)) {
                         an.needsT = true;
                     }
                 }
                 if (an.rotation) {
-                    Vec3 euler = an.rotation->getNodeLocalTransform(frameTime);
-                    float *rd = &an.rdata[an.width * frame];
-                    eulerToQuaternion(euler, rd);
+                    float *rr = &an.rdata[an.width * frame];
+                    memcpy(rr, rd, sizeof(rd));
                     if (!close(rn, rd, 4, opts->animError)) {
                         an.needsR = true;
                     }
                 }
                 if (an.scale) {
-                    Vec3 scale = an.scale->getNodeLocalTransform(frameTime);
-                    float *sd = &an.sdata[an.width * frame];
-                    sd[0] = (float) scale.x;
-                    sd[1] = (float) scale.y;
-                    sd[2] = (float) scale.z;
+                    float *sr = &an.sdata[an.width * frame];
+                    memcpy(sr, sd, sizeof(sd));
                     if (!close(sn, sd, 3, opts->animError)) {
                         an.needsS = true;
                     }
@@ -1011,7 +1031,6 @@ static void convertAnimations(const IScene *scene, Model *model, Options *opts) 
             }
         }
 
-        // anim->nodeIDs.push_back(node->id);
         // Next up, assign offsets to all of the channels for the packed format and strip untransformed nodes.
         int offset = 0;
         for (AnimatedNode &an : animatedNodes) {

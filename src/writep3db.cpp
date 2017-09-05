@@ -177,8 +177,8 @@ static void writeG3dAnimation(Animation *anim, BaseJSONWriter &writer) {
         for (int d = 0; d < nFrames; d++) {
             writer.obj();
             writer << "keytime" = (d * anim->samplingRate * 1000);
-            if (toff >= 0) writer.val("translation").data(&frameData[toff], 3);
             if (roff >= 0) writer.val("rotation").data(&frameData[roff], 4);
+            if (toff >= 0) writer.val("translation").data(&frameData[toff], 3);
             if (soff >= 0) writer.val("scale").data(&frameData[soff], 3);
             writer.end();
             frameData += frameSize;
@@ -229,7 +229,7 @@ static void writeModel(Model *model, BaseJSONWriter &writer) {
 
     writer.val("animations").arr(model->animations.size());
     for (Animation &anim : model->animations) {
-        writeP3dAnimation(&anim, writer);
+        writeG3dAnimation(&anim, writer);
     }
     writer.end();
 
