@@ -14,46 +14,25 @@ static_assert(sizeof(u8) == 1, "u8 is not 1 byte");
 static_assert(sizeof(u32) == 4, "u32 is not 4 bytes");
 static_assert(sizeof(u64) == 8, "u64 is not 8 bytes");
 
-enum class RotationOrder {
-	EULER_XYZ = 0,
-	EULER_XZY,
-	EULER_YZX,
-	EULER_YXZ,
-	EULER_ZXY,
-	EULER_ZYX,
-	SPHERIC_XYZ
-};
 
 struct Vec2
 {
-	union {
-		double xy[2];
-		struct {
-			double x, y;
-		};
-	};
+	double x, y;
 };
 
 
 struct Vec3
 {
 	union {
+		struct { double x, y, z; };
 		double xyz[3];
-		struct {
-			double x, y, z;
-		};
 	};
 };
 
 
 struct Vec4
 {
-	union {
-		double xyzw[4];
-		struct {
-			double x, y, z, w;
-		};
-	};
+	double x, y, z, w;
 };
 
 
@@ -65,12 +44,7 @@ struct Matrix
 
 struct Quat
 {
-	union {
-		double xyzw[4];
-		struct {
-			double x, y, z, w;
-		};
-	};
+	double x, y, z, w;
 };
 
 
@@ -78,12 +52,16 @@ struct DataView
 {
 	const u8* begin = nullptr;
 	const u8* end = nullptr;
+	bool is_binary = true;
 
 	bool operator!=(const char* rhs) const { return !(*this == rhs); }
 	bool operator==(const char* rhs) const;
 
 	u64 toLong() const;
+	int toInt() const;
+	u32 toU32() const;
 	double toDouble() const;
+	float toFloat() const;
 	
 	template <int N>
 	void toString(char(&out)[N]) const
@@ -99,7 +77,8 @@ struct DataView
 		*cout = '\0';
 	}
 
-	void toString(char *out, int N) {
+	void toString(char *out, int N) const
+	{
 		char* cout = out;
 		const u8* cin = begin;
 		while (cin != end && cout - out < N - 1)
@@ -148,6 +127,17 @@ struct IElement
 };
 
 
+enum class RotationOrder {
+	EULER_XYZ,
+	EULER_XZY,
+	EULER_YZX,
+	EULER_YXZ,
+	EULER_ZXY,
+	EULER_ZYX,
+    SPHERIC_XYZ // Currently unsupported. Treated as EULER_XYZ.
+};
+
+
 struct AnimationCurveNode;
 struct AnimationLayer;
 struct Scene;
@@ -185,7 +175,7 @@ struct Object
 	Object* resolveObjectLinkReverse(Type type) const;
 	Object* getParent() const;
 
-	RotationOrder getRotationOrder() const;
+    RotationOrder getRotationOrder() const;
 	Vec3 getRotationOffset() const;
 	Vec3 getRotationPivot() const;
 	Vec3 getPostRotation() const;
@@ -370,8 +360,6 @@ struct IScene
 	virtual void destroy() = 0;
 	virtual const IElement* getRootElement() const = 0;
 	virtual const Object* getRoot() const = 0;
-	virtual int getTakeInfoCount() const = 0;
-	virtual const TakeInfo* getTakeInfo(int index) const = 0;
 	virtual const TakeInfo* getTakeInfo(const char* name) const = 0;
 	virtual int getMeshCount() const = 0;
 	virtual const Mesh* getMesh(int index) const = 0;
