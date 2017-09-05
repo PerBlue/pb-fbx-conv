@@ -14,6 +14,15 @@ static_assert(sizeof(u8) == 1, "u8 is not 1 byte");
 static_assert(sizeof(u32) == 4, "u32 is not 4 bytes");
 static_assert(sizeof(u64) == 8, "u64 is not 8 bytes");
 
+enum RotationOrder {
+	EULER_XYZ = 0,
+	EULER_XZY,
+	EULER_YZX,
+	EULER_YXZ,
+	EULER_ZXY,
+	EULER_ZYX,
+	SPHERIC_XYZ
+};
 
 struct Vec2
 {
@@ -176,6 +185,7 @@ struct Object
 	Object* resolveObjectLinkReverse(Type type) const;
 	Object* getParent() const;
 
+	RotationOrder getRotationOrder() const;
 	Vec3 getRotationOffset() const;
 	Vec3 getRotationPivot() const;
 	Vec3 getPostRotation() const;
