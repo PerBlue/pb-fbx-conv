@@ -700,7 +700,7 @@ struct MeshImpl : Mesh
 		scale_mtx.m[0] = (float)scale.x;
 		scale_mtx.m[5] = (float)scale.y;
 		scale_mtx.m[10] = (float)scale.z;
-		Matrix mtx = getRotationMatrix(rotation, getRotationOrder());
+		Matrix mtx = getRotationMatrix(rotation, EULER_XYZ);
 		setTranslation(translation, &mtx);
 
 		return scale_mtx * mtx;
@@ -2193,43 +2193,7 @@ RotationOrder Object::getRotationOrder() const
 
 Matrix Object::evalLocal(const Vec3& translation, const Vec3& rotation) const
 {
-	Vec3 scaling = getLocalScaling();
-	Vec3 rotation_pivot = getRotationPivot();
-	Vec3 scaling_pivot = getScalingPivot();
-	RotationOrder rotationOrder = getRotationOrder();
-
-	Matrix s = makeIdentity();
-	s.m[0] = scaling.x;
-	s.m[5] = scaling.y;
-	s.m[10] = scaling.z;
-
-	Matrix t = makeIdentity();
-	setTranslation(translation, &t);
-
-	Matrix r = getRotationMatrix(rotation, rotationOrder);
-	Matrix r_pre = getRotationMatrix(getPreRotation(), rotationOrder);
-	Matrix r_post_inv = getRotationMatrix(getPostRotation(), rotationOrder);
-
-	Matrix r_off = makeIdentity();
-	setTranslation(getRotationOffset(), &r_off);
-
-	Matrix r_p = makeIdentity();
-	setTranslation(rotation_pivot, &r_p);
-
-	Matrix r_p_inv = makeIdentity();
-	setTranslation(-rotation_pivot, &r_p_inv);
-
-	Matrix s_off = makeIdentity();
-	setTranslation(getScalingOffset(), &s_off);
-
-	Matrix s_p = makeIdentity();
-	setTranslation(scaling_pivot, &s_p);
-
-	Matrix s_p_inv = makeIdentity();
-	setTranslation(-scaling_pivot, &s_p_inv);
-
-	// http://help.autodesk.com/view/FBX/2017/ENU/?guid=__files_GUID_10CDD63C_79C1_4F2D_BB28_AD2BE65A02ED_htm
-	return t * r_off * r_p * r_pre * r * r_post_inv * r_p_inv * s_off * s_p * s * s_p_inv;
+	return evalLocal(translation, rotation, getLocalScaling());
 }
 
 Matrix Object::evalLocal(const Vec3& translation, const Vec3& rotation, const Vec3& scale) const
@@ -2247,8 +2211,8 @@ Matrix Object::evalLocal(const Vec3& translation, const Vec3& rotation, const Ve
 	setTranslation(translation, &t);
 
 	Matrix r = getRotationMatrix(rotation, rotationOrder);
-	Matrix r_pre = getRotationMatrix(getPreRotation(), rotationOrder);
-	Matrix r_post_inv = getRotationMatrix(getPostRotation(), rotationOrder);
+	Matrix r_pre = getRotationMatrix(getPreRotation(), EULER_XYZ);
+	Matrix r_post_inv = getRotationMatrix(getPostRotation(), EULER_XYZ);
 
 	Matrix r_off = makeIdentity();
 	setTranslation(getRotationOffset(), &r_off);
