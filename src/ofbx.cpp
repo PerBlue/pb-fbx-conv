@@ -181,19 +181,19 @@ static Matrix getRotationMatrix(const Vec3& euler, RotationOrder order)
 	Matrix rz = rotationZ(euler.z * TO_RAD);
 	switch (order) {
 		default:
-		case SPHERIC_XYZ:
+		case RotationOrder::SPHERIC_XYZ:
 			printf("Warning: Unsupported rotation order: %d\n", order);
-		case EULER_XYZ:
+		case RotationOrder::EULER_XYZ:
 			return rz * ry * rx;
-		case EULER_XZY:
+		case RotationOrder::EULER_XZY:
 			return ry * rz * rx;
-		case EULER_YXZ:
+		case RotationOrder::EULER_YXZ:
 			return rz * rx * ry;
-		case EULER_YZX:
+		case RotationOrder::EULER_YZX:
 			return rx * rz * ry;
-		case EULER_ZXY:
+		case RotationOrder::EULER_ZXY:
 			return ry * rx * rz;
-		case EULER_ZYX:
+		case RotationOrder::EULER_ZYX:
 			return rx * ry * rz;
 	}
 }
@@ -700,7 +700,7 @@ struct MeshImpl : Mesh
 		scale_mtx.m[0] = (float)scale.x;
 		scale_mtx.m[5] = (float)scale.y;
 		scale_mtx.m[10] = (float)scale.z;
-		Matrix mtx = getRotationMatrix(rotation, EULER_XYZ);
+		Matrix mtx = getRotationMatrix(rotation, RotationOrder::EULER_XYZ);
 		setTranslation(translation, &mtx);
 
 		return scale_mtx * mtx;
@@ -2187,7 +2187,7 @@ RotationOrder Object::getRotationOrder() const
 {
 	// TODO: This function assumes that the default rotation order defined in the file is 0 (EULER_XYZ).
 	// While this is true in all files I've seen, it may not be true in general.
-	return (RotationOrder) resolveEnumProperty(*this, "RotationOrder", EULER_XYZ);
+	return (RotationOrder) resolveEnumProperty(*this, "RotationOrder", (int) RotationOrder::EULER_XYZ);
 }
 
 
@@ -2211,8 +2211,8 @@ Matrix Object::evalLocal(const Vec3& translation, const Vec3& rotation, const Ve
 	setTranslation(translation, &t);
 
 	Matrix r = getRotationMatrix(rotation, rotationOrder);
-	Matrix r_pre = getRotationMatrix(getPreRotation(), EULER_XYZ);
-	Matrix r_post_inv = getRotationMatrix(getPostRotation(), EULER_XYZ);
+	Matrix r_pre = getRotationMatrix(getPreRotation(), RotationOrder::EULER_XYZ);
+	Matrix r_post_inv = getRotationMatrix(getPostRotation(), RotationOrder::EULER_XYZ);
 
 	Matrix r_off = makeIdentity();
 	setTranslation(getRotationOffset(), &r_off);
