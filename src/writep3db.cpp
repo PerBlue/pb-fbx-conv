@@ -238,7 +238,7 @@ static void writeModel(Model *model, BaseJSONWriter &writer, bool pbAnimations) 
 }
 
 bool writeP3db(Model *model, const char *filename, bool pbAnimations) {
-    ofstream out(filename);
+    ofstream out(filename, ios::binary);
     if (!out) {
         printf("Error: Failed to open output file %s for writing.\n", filename);
         return false;
