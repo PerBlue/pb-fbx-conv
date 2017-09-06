@@ -10,17 +10,18 @@
 static void printHelp(const char *programName) {
     printf("Usage: %s [options] filename [outfile]\n", programName);
     printf("Options:\n");
-    printf("  -o ignored    legacy flag, its value is ignored.\n");
     printf("  -m maxVerts   limit the max number of vertices in a [m]esh (default 32768)\n");
     printf("  -b maxBones   limit the max number of [b]ones in a draw call (default 12)\n");
     printf("  -w maxWeights limit the max number of bone [w]eights per vertex (default 4)\n");
-    printf("  -f            flip the V texture axis\n");
-    printf("  -p            pack vertex colors into 4 bytes\n");
-    printf("  -j            output g3dj instead of g3db\n");
-    printf("  -r samplerate frame rate at which to sample animations\n");
-    printf("  -s playspeed  animation playback speed, will be used to scale the sample rate\n");
-    printf("  -b            output p3db files instead of g3db\n");
+    printf("  -f            [f]lip the V texture axis\n");
+    printf("  -p            [p]ack vertex colors into 4 bytes\n");
+    printf("  -j            output g3d[j] instead of g3db\n");
+    printf("  -r samplerate frame [r]ate at which to sample animations\n");
+    printf("  -s playspeed  animation playback [s]peed, will be used to scale the sample rate\n");
+    printf("  -a            output p3db [a]nimations instead of g3db\n");
     printf("  -h or -?      display this [h]elp message and exit\n");
+	printf("  -v            legacy flag, its [v]alue is ignored.\n");
+    printf("  -o ignored    legacy flag, its value is ign[o]red.\n");
     printf("\n");
     printf("Debugging Options:\n");
     printf("  -d [flags]    dump intermediate data. Possible flags are:\n");
@@ -184,6 +185,8 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
 
         // handle unary args here
         switch (nextmode) {
+		case 'v':
+			break;
         case 'f':
             opts->flipV = true;
             break;
@@ -193,7 +196,7 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
         case 'j':
             opts->useJson = true;
             break;
-        case 'b':
+        case 'a':
             opts->p3db = true;
             break;
         case 'h':
