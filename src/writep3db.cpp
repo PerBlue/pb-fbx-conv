@@ -203,7 +203,7 @@ static void writeP3dAnimation(Animation *anim, BaseJSONWriter &writer) {
     writer.end();
 }
 
-static void writeModel(Model *model, BaseJSONWriter &writer) {
+static void writeModel(Model *model, BaseJSONWriter &writer, bool pbAnimations) {
     writer.obj(6);
     short version[2] = {0, 1};
     writer << "version" = version;
@@ -229,14 +229,15 @@ static void writeModel(Model *model, BaseJSONWriter &writer) {
 
     writer.val("animations").arr(model->animations.size());
     for (Animation &anim : model->animations) {
-        writeG3dAnimation(&anim, writer);
+        if (pbAnimations) writeP3dAnimation(&anim, writer);
+        else              writeG3dAnimation(&anim, writer);
     }
     writer.end();
 
     writer.end();
 }
 
-bool writeP3db(Model *model, const char *filename) {
+bool writeP3db(Model *model, const char *filename, bool pbAnimations) {
     ofstream out(filename);
     if (!out) {
         printf("Error: Failed to open output file %s for writing.\n", filename);
@@ -244,12 +245,12 @@ bool writeP3db(Model *model, const char *filename) {
     }
     UBJSONWriter writer(out);
 
-    writeModel(model, writer);
+    writeModel(model, writer, pbAnimations);
 
     return true;
 }
 
-bool writeP3dj(Model *model, const char *filename) {
+bool writeP3dj(Model *model, const char *filename, bool pbAnimations) {
     ofstream out(filename);
     if (!out) {
         printf("Error: Failed to open output file %s for writing.\n", filename);
@@ -257,7 +258,7 @@ bool writeP3dj(Model *model, const char *filename) {
     }
     JSONWriter writer(out);
 
-    writeModel(model, writer);
+    writeModel(model, writer, pbAnimations);
 
     return true;
 }

@@ -22,6 +22,7 @@ struct Options {
     float animError = 0.0001;
 
     bool useJson = false;
+    bool p3db = false;
 
     bool dumpElementTree = false;
     bool dumpObjectTree = false;

@@ -19,6 +19,7 @@ static void printHelp(const char *programName) {
     printf("  -j            output g3dj instead of g3db\n");
     printf("  -r samplerate frame rate at which to sample animations\n");
     printf("  -s playspeed  animation playback speed, will be used to scale the sample rate\n");
+    printf("  -b            output p3db files instead of g3db\n");
     printf("  -h or -?      display this [h]elp message and exit\n");
     printf("\n");
     printf("Debugging Options:\n");
@@ -192,6 +193,9 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
         case 'j':
             opts->useJson = true;
             break;
+        case 'b':
+            opts->p3db = true;
+            break;
         case 'h':
         case '?':
             printHelp(argv[0]);
@@ -228,9 +232,16 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
             if (lastDot == nullptr) pos = strlen(opts->filepath);
             else pos = lastDot - opts->filepath;
 
-            opts->outpath = new char[pos + 6]; // .p3db\0
+            const char *ext;
+            if (opts->useJson && opts->p3db)    ext = ".p3dj";
+            else if (opts->useJson)             ext = ".g3dj";
+            else if (opts->p3db)                ext = ".p3db";
+            else                                ext = ".g3db";
+
+            int extLen = strlen(ext);
+            opts->outpath = new char[pos + extLen + 1];
             strncpy(opts->outpath, opts->filepath, pos);
-            strncpy(opts->outpath + pos, ".p3db", 6);
+            strncpy(opts->outpath + pos, ext, extLen + 1);
         }
 
         if (opts->maxBlendWeights == 0 || opts->maxDrawBones == 0) {

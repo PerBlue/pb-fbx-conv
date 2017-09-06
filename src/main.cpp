@@ -69,8 +69,8 @@ int main(int argc, char *argv[]) {
     convertFbxToModel(scene, &model, &opts);
 
     // export model to json
-    if (opts.useJson) writeP3dj(&model, opts.outpath);
-    else              writeP3db(&model, opts.outpath);
+    if (opts.useJson) writeP3dj(&model, opts.outpath, opts.p3db);
+    else              writeP3db(&model, opts.outpath, opts.p3db);
 
     clock_t end = clock();
     printf("Completed in %dms\n", int((end - start) * 1000 / CLOCKS_PER_SEC));
