@@ -17,6 +17,8 @@ static void printHelp(const char *programName) {
     printf("  -f            flip the V texture axis\n");
     printf("  -p            pack vertex colors into 4 bytes\n");
     printf("  -j            output g3dj instead of g3db\n");
+    printf("  -r samplerate frame rate at which to sample animations\n");
+    printf("  -s playspeed  animation playback speed, will be used to scale the sample rate\n");
     printf("  -h or -?      display this [h]elp message and exit\n");
     printf("\n");
     printf("Debugging Options:\n");
@@ -101,6 +103,26 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
                 } else {
                     opts->maxBlendWeights = weights;
                     if (weights == 0) printf("Disabling vertex skinning because of '-w 0' argument.");
+                }
+                break;
+            }
+
+            case 'r': {
+                double framerate = atof(cc);
+                if (framerate <= 0) {
+                    printf("Error: Framerate must be positive. (%f requested)\n", framerate);
+                } else {
+                    opts->animFramerate = framerate;
+                }
+                break;
+            }
+
+            case 's': {
+                double playSpeed = atof(cc);
+                if (playSpeed <= 0) {
+                    printf("Error: Animation Playback Speed must be positive. (%f requested)\n", playSpeed);
+                } else {
+                    opts->animPlaySpeed = playSpeed;
                 }
                 break;
             }
@@ -215,6 +237,8 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
             opts->maxBlendWeights = 0;
             opts->maxDrawBones = 0;
         }
+
+        opts->animSamplingRate = opts->animPlaySpeed / opts->animFramerate;
     }
 
     return success;

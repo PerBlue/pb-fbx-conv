@@ -16,7 +16,9 @@ struct Options {
     int maxBlendWeights = 4;
     bool flipV = false;
     bool packVertexColors = false;
-    double animSamplingRate = 1.0 / 30.0;
+    double animFramerate = 15.0;
+    double animPlaySpeed = 1.0;
+    double animSamplingRate = 1.0 / 15.0;
     float animError = 0.0001;
 
     bool useJson = false;

@@ -915,6 +915,10 @@ static void convertAnimations(const IScene *scene, Model *model, Options *opts) 
     collectNodesRecursive(model->nodes, nodes);
 
     int nAnimation = scene->getAnimationStackCount();
+    if (nAnimation > 0) {
+        printf("Sampling animations every %f seconds (%f FPS)\n", opts->animSamplingRate, 1.0/opts->animSamplingRate);
+    }
+
     for (int c = 0; c < nAnimation; c++) {
         const AnimationStack *stack = scene->getAnimationStack(c);
         const TakeInfo *take = scene->getTakeInfo(stack->name);
