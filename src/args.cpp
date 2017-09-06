@@ -16,6 +16,7 @@ static void printHelp(const char *programName) {
     printf("  -w maxWeights limit the max number of bone [w]eights per vertex (default 4)\n");
     printf("  -f            flip the V texture axis\n");
     printf("  -p            pack vertex colors into 4 bytes\n");
+    printf("  -j            output g3dj instead of g3db\n");
     printf("  -h or -?      display this [h]elp message and exit\n");
     printf("\n");
     printf("Debugging Options:\n");
@@ -165,6 +166,9 @@ bool parseArgs(int argc, char *argv[], Options *opts) {
             break;
         case 'p':
             opts->packVertexColors = true;
+            break;
+        case 'j':
+            opts->useJson = true;
             break;
         case 'h':
         case '?':

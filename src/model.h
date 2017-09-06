@@ -141,7 +141,7 @@ struct Animation {
     u32 frames;
     f32 samplingRate;
     std::vector<std::string> nodeIDs;
-    std::vector<s32> nodeFormats;
+    std::vector<s32> nodeFormats; // note: Changing this to s16/u16 would break model loading. Doesn't really matter because these arrays are small.
     std::vector<f32> nodeData;
 };
 

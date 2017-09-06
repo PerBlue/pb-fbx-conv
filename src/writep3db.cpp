@@ -194,7 +194,7 @@ static void writeG3dAnimation(Animation *anim, BaseJSONWriter &writer) {
 static void writeP3dAnimation(Animation *anim, BaseJSONWriter &writer) {
     writer.obj(7);
     writer << "id" = anim->id;
-    writer << "duration" = (anim->samplingRate * anim->frames);
+    writer << "duration" = (anim->samplingRate * (anim->frames - 1));
     writer << "frames" = anim->frames;
     writer << "bones" = anim->nodeIDs;
     writer << "formats" = anim->nodeFormats;
@@ -243,6 +243,19 @@ bool writeP3db(Model *model, const char *filename) {
         return false;
     }
     UBJSONWriter writer(out);
+
+    writeModel(model, writer);
+
+    return true;
+}
+
+bool writeP3dj(Model *model, const char *filename) {
+    ofstream out(filename);
+    if (!out) {
+        printf("Error: Failed to open output file %s for writing.\n", filename);
+        return false;
+    }
+    JSONWriter writer(out);
 
     writeModel(model, writer);
 

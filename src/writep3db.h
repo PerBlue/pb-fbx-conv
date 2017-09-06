@@ -8,5 +8,6 @@
 #include "model.h"
 
 bool writeP3db(Model *model, const char *filename);
+bool writeP3dj(Model *model, const char *filename);
 
 #endif //PB_FBX_CONV_WRITEP3DB_H

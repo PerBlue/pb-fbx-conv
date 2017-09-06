@@ -19,6 +19,8 @@ struct Options {
     double animSamplingRate = 1.0 / 30.0;
     float animError = 0.0001;
 
+    bool useJson = false;
+
     bool dumpElementTree = false;
     bool dumpObjectTree = false;
     bool dumpNodeTree = false;
