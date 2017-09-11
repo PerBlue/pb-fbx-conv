@@ -562,7 +562,7 @@ static int *assignTrisToPartsFromSkin(MeshData *data) {
     return trisToParts;
 }
 
-static void addBones(MeshData *data, PreMeshPart *part, NodePart *np, const Matrix *geometryMatrix) {
+static void addBones(MeshData *data, PreMeshPart *part, NodePart *np, const Matrix *geometry) {
     if (part->nodes[0] < 0) return; // no bones
     const Skin *skin = data->skin;
     if (!skin) return;
@@ -580,15 +580,25 @@ static void addBones(MeshData *data, PreMeshPart *part, NodePart *np, const Matr
         assert(link->isNode());
         findName(link, "Node", bone->nodeID);
 
+        printf("%s\n", bone->nodeID.c_str());
         // calculate the inverse bind pose
         // This is pretty much a total guess, but it produces the same results as the reference converter.
         Matrix clusterLinkTransform = cluster->getTransformLinkMatrix();
+        printf("Cluster Link\n");
+        dumpMatrix(clusterLinkTransform);
+        printf("Geometry\n");
+        dumpMatrix(*geometry);
         Matrix invLinkTransform;
         invertMatrix(&clusterLinkTransform, &invLinkTransform);
-        Matrix bindPose = mul(&invLinkTransform, geometryMatrix);
+        Matrix bindPose = mul(&invLinkTransform, geometry);
+        printf("Bind Pose\n");
+        dumpMatrix(bindPose);
         Matrix invBindPose;
         invertMatrix(&bindPose, &invBindPose);
+        printf("Inv Bind Pose\n");
+        dumpMatrix(invBindPose);
         extractTransform(&invBindPose, bone->translation, bone->rotation, bone->scale);
+        printf("\n");
     }
 }
 
@@ -817,6 +827,8 @@ static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, M
 
     // reify the mesh parts
     Matrix geomTf = mesh->getGeometricMatrix();
+    Matrix meshTf = mesh->getGlobalTransform();
+    Matrix nodeTf = mul(&meshTf, &geomTf);
     outMesh->parts.reserve(outMesh->parts.size() + data.parts.size());
     int partID = 0;
     for (PreMeshPart &part : data.parts) {
@@ -839,7 +851,7 @@ static void convertMeshNode(const IScene *scene, const Mesh *mesh, Node *node, M
         NodePart *np = &node->parts.back();
         np->meshPartID = mp.id;
         np->materialID = model->materials[baseIdx + part.material].id;
-        addBones(&data, &part, np, &geomTf);
+        addBones(&data, &part, np, &nodeTf);
 
         partID++;
     }
