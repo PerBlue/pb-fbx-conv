@@ -2622,7 +2622,7 @@ Matrix Object::evalLocal(const Vec3& translation, const Vec3& rotation, const Ve
 
 	Matrix r = getRotationMatrix(rotation, rotation_order);
 	Matrix r_pre = getRotationMatrix(getPreRotation(), RotationOrder::EULER_XYZ);
-	Matrix r_post_inv = getRotationMatrix(getPostRotation(), RotationOrder::EULER_XYZ);
+	Matrix r_post_inv = getRotationMatrix(-getPostRotation(), RotationOrder::EULER_ZYX);
 
 	Matrix r_off = makeIdentity();
 	setTranslation(getRotationOffset(), &r_off);
