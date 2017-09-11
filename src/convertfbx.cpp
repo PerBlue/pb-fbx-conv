@@ -580,25 +580,15 @@ static void addBones(MeshData *data, PreMeshPart *part, NodePart *np, const Matr
         assert(link->isNode());
         findName(link, "Node", bone->nodeID);
 
-        printf("%s\n", bone->nodeID.c_str());
         // calculate the inverse bind pose
         // This is pretty much a total guess, but it produces the same results as the reference converter.
         Matrix clusterLinkTransform = cluster->getTransformLinkMatrix();
-        printf("Cluster Link\n");
-        dumpMatrix(clusterLinkTransform);
-        printf("Geometry\n");
-        dumpMatrix(*geometry);
         Matrix invLinkTransform;
         invertMatrix(&clusterLinkTransform, &invLinkTransform);
         Matrix bindPose = mul(&invLinkTransform, geometry);
-        printf("Bind Pose\n");
-        dumpMatrix(bindPose);
         Matrix invBindPose;
         invertMatrix(&bindPose, &invBindPose);
-        printf("Inv Bind Pose\n");
-        dumpMatrix(invBindPose);
         extractTransform(&invBindPose, bone->translation, bone->rotation, bone->scale);
-        printf("\n");
     }
 }
 
