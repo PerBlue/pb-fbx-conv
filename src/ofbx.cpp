@@ -1455,12 +1455,12 @@ struct AnimationCurveNodeImpl : AnimationCurveNode
 	}
 
 
-	Vec3 getNodeLocalTransform(double time) const override
+	Vec3 getNodeLocalTransform(double time, Vec3 fallback) const override
 	{
 		u64 fbx_time = secondsToFbxTime(time);
 
-		auto getCoord = [](const Curve& curve, u64 fbx_time) {
-			if (!curve.curve) return 0.0f;
+		auto getCoord = [](const Curve& curve, u64 fbx_time, float fallback) {
+			if (!curve.curve) return fallback;
 
 			const u64* times = curve.curve->getKeyTime();
 			const float* values = curve.curve->getKeyValue();
@@ -1479,7 +1479,7 @@ struct AnimationCurveNodeImpl : AnimationCurveNode
 			return values[0];
 		};
 
-		return {getCoord(curves[0], fbx_time), getCoord(curves[1], fbx_time), getCoord(curves[2], fbx_time)};
+		return {getCoord(curves[0], fbx_time, (float)fallback.x), getCoord(curves[1], fbx_time, (float)fallback.y), getCoord(curves[2], fbx_time, (float)fallback.z)};
 	}
 
 

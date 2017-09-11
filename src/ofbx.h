@@ -340,7 +340,7 @@ struct AnimationCurveNode : Object
 
 	AnimationCurveNode(const Scene& _scene, const IElement& _element);
 
-	virtual Vec3 getNodeLocalTransform(double time) const = 0;
+	virtual Vec3 getNodeLocalTransform(double time, Vec3 fallback) const = 0;
 };
 
 

@@ -992,13 +992,12 @@ static void convertAnimations(const IScene *scene, Model *model, Options *opts) 
             double frameTime = startTime + (frame * timespan) / (numKeyframes - 1);
             for (AnimatedNode &an : animatedNodes) {
                 // Get animated t/r/s
-                Vec3 ts, rs, ss;
-                if (an.translation) ts = an.translation->getNodeLocalTransform(frameTime);
-                else ts = an.modelNode->source->getLocalTranslation();
-                if (an.rotation) rs = an.rotation->getNodeLocalTransform(frameTime);
-                else rs = an.modelNode->source->getLocalRotation();
-                if (an.scale) ss = an.scale->getNodeLocalTransform(frameTime);
-                else ss = an.modelNode->source->getLocalScaling();
+                Vec3 ts = an.modelNode->source->getLocalTranslation();
+                Vec3 rs = an.modelNode->source->getLocalRotation();
+                Vec3 ss = an.modelNode->source->getLocalScaling();
+                if (an.translation) ts = an.translation->getNodeLocalTransform(frameTime, ts);
+                if (an.rotation) rs = an.rotation->getNodeLocalTransform(frameTime, rs);
+                if (an.scale) ss = an.scale->getNodeLocalTransform(frameTime, ss);
 
                 // Convert to the object's local coordinate frame
                 Matrix animTransform = an.modelNode->source->evalLocal(ts, rs, ss);
